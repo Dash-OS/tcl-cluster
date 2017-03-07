@@ -1,21 +1,25 @@
 namespace eval ::cluster {
   namespace ensemble create
   namespace export {[a-z]*}
+  # Our cached addresses will be stored here
 }
 
+# Any dependencies based on the platform should be included here.
 switch -- $::tcl_platform(platform) {
   unix { package require tuapi }
 }
 
 variable ::cluster::i 0
+variable ::cluster::addresses [list]
 variable ::cluster::default_config [dict create \
   name        [pid] \
   address     230.230.230.230 \
   port        23000 \
-  ttl         600000 \
+  ttl         600 \
   heartbeat   120000 \
   protocols   [list t c] \
-  remote      0
+  remote      0 \
+  tags        [list]
 ]
 
 namespace eval ::cluster::clusters {}
@@ -25,17 +29,40 @@ namespace eval ::cluster::protocol {}
 ::oo::class create ::cluster::cluster {}
 ::oo::class create ::cluster::service {}
 
-source "./classes/cluster.tcl"
-source "./classes/service.tcl"
-source "./protocols/cluster-cluster.tcl"
-source "./protocols/cluster-tcp.tcl"
+set bpacket_directory [file join [file dirname [file normalize [info script]]] bpacket]
+foreach file [glob -directory $bpacket_directory *.tcl] {
+  source $file
+}
+unset bpacket_directory
+
+set classes_directory [file join [file dirname [file normalize [info script]]] classes]
+foreach file [glob -directory $classes_directory *.tcl] {
+  source $file
+}
+unset classes_directory
+
+# Automatically source protocols in the protocols directory
+set protocol_directory [file join [file dirname [file normalize [info script]]] protocols]
+foreach file [glob -directory $protocol_directory *.tcl] {
+ source $file 
+}
+unset protocol_directory
+
+set utils_directory [file join [file dirname [file normalize [info script]]] utils]
+foreach file [glob -directory $utils_directory *.tcl] {
+  source $file
+}
+unset utils_directory
 
 proc ::cluster::join args {
   variable i
   set config $::cluster::default_config
+  if { [dict exists $args -protocols] } {
+    set protocols [dict get $args -protocols]
+  } else { set protocols [dict get $config protocols] }
   dict for { k v } $args {
     set k [string trimleft $k -]
-    if { ! [dict exists $config $k] } {
+    if { ! [dict exists $config $k] && $k ni $protocols } {
       throw error "Invalid Cluster Config Key: ${k}, should be one of [dict keys $config]"
     }
     if { [string equal $k protocols] } {
@@ -77,13 +104,15 @@ proc ::cluster::lanip {} {
 }
 
 # Check a $peer value to see if it is from a local source or not.
-proc ::cluster::islocal { peer } {
-  set ip [lindex $peer 0]
-  if { $ip eq "127.0.0.1" } { return 1 }
+proc ::cluster::islocal { descriptor } {
+  if { [dict exists $descriptor address] } {
+    set address [dict get $descriptor address] 
+  } else { return 0 }
+  if { $address eq "127.0.0.1" } { return 1 }
   switch $::tcl_platform(platform) {
     unix {
       dict for { iface params } [::tuapi::ifconfig] {
-        if { [dict exists $params address] && [dict get $params address] eq $ip } {
+        if { [dict exists $params address] && [dict get $params address] eq $address } {
           return 1
         }
       }
@@ -92,106 +121,29 @@ proc ::cluster::islocal { peer } {
   return 0
 }
 
+proc ::cluster::local_addresses {} {
+  variable addresses
+  if { $addresses ne {} } { return $addresses }
+  set addresses [list 127.0.0.1]
+  switch $::tcl_platform(platform) {
+    unix {
+      dict for { iface params } [::tuapi::ifconfig] {
+        if { [dict exists $params address] } {
+          set address [dict get $params address]
+          if { $address ni $addresses } { lappend addresses $address }
+        }
+      }
+    }
+  }
+  return $addresses
+}
+
+proc ::cluster::query_id {} {
+  return [incr ::cluster::i]
+}
+
 proc ::cluster::ifhook {hooks args} {
   if { [dict exists $hooks {*}$args] } {
-    return [dict get $hooks {*}$args] 
+    tailcall dict get $hooks {*}$args
   }
 }
-
-# Take a $UUID value and split it into its parts, returning a list
-# with each part [list $hwaddr $name $protocols]
-# 00:1F:B8:2A:01:1F@29246.c.t -> [list 00:1F:B8:2A:01:1F 29246 [list c t]]
-proc ::cluster::split_uuid { uuid } {
-  lassign [split $uuid @] hwaddr props
-  set protocols [lassign [split $props .] name]
-  return [list $hwaddr $name $protocols]
-}
-
-
-# Join the default cluster.  If this is called on multiple machines, they will
-# immediately begin communicating seeing each other.
-# set cluster [cluster join]
-
-# We can define changes to the default configuration by providing -$k $v arguments
-# set cluster [cluster join -name my-service]
-# set cluster [cluster join -name my-server -port 22000 -protocols [list c t u]
-
-# $cluster on service discovered {
-#   # access to $service and $cluster - execute within $cluster namespace
-# }
-
-# $cluster on service lost {
-#   # access to $service and $cluster - executed within $cluster namespace
-# }
-
-# $cluster on error { result options } {
-#   # access to $cluster executed within $cluster namespace
-# }
-
-# $cluster on service error {result options} {
-#   # access to $cluster $service executed within $service namespace.  Throw error
-#   # if want to pass the error up to the cluster error handler.
-# }
-
-# # Hooks are different from handlers.  The handlers are executed as lambdas while
-# # hooks are evaluated as a means of mutating values at various points in the 
-# # execution context.
-# #
-# # Generally these should follow specific guidelines.
-
-# # $op - $ruid - $peer - $service - [self] - [my __] 
-# # Error: cancels evaluation of received
-# $cluster hook receive {
-#   puts "RECEIVED!!"
-# }
-
-# # $proto - $op (includes ruid) - $data - $service (if applicable)
-# # Error: cancels sending to protocol
-# $cluster hook send {
-#   puts "SENDING!"
-# }
-
-# $cluster hook protocol t receive {
-  
-# }
-
-# $cluster hook protocol t send {
-  
-# }
-
-# $cluster hook op <op> receive {
-  
-# }
-
-# $cluster hook op <op> send {
-  
-# }
-
-# # $uuid - $peer - $service - $descriptor - $hwaddr - $name - $protocols
-# $cluster hook service eval {
-  
-# }
-
-# # $uuid - $peer - $service - $descriptor - $hwaddr - $name - $protocols
-# $cluster hook service validate {
-  
-# }
-
-# # Called when a service has been discovered
-# #
-# # $uuid - $peer - $service - $descriptor - $hwaddr - $name - $protocols
-# $cluster hook service found {
-  
-# }
-
-# # Called when a service is lost 
-# #
-# # $service - Where $service is still a valid service (it has not yet been destroyed)
-# $cluster hook service lost {
-  
-# }
-
-# $cluster sendto [$cluster resolve 192.168.1.60 1] C {set ::status} then { result } {
-#   # Do something with each result that we receive Our $result variable is within this
-#   # context, as is the $service , $cluster , and other common variables.
-# }

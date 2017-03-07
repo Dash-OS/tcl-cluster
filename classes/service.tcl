@@ -1,168 +1,307 @@
 
+# Each service that is discovered will have an object created which manages
+# its lifecycle.
+#
+#
 ::oo::define ::cluster::service {
-  variable CLUSTER
-  variable UUID PEER PROPS LOCAL HWADDR NAME
-  variable LAST_HEARTBEAT AFTER_ID
+  variable CLUSTER UUID CHANNELS
+  variable LAST_HEARTBEAT PROPS 
+  variable PROTOCOLS FLAGS SERVICE_ID SYSTEM_ID
+  variable SOCKETS ADDRESS TAGS LOCAL
 }
 
-# cluster - a reference to the parent cluster
-# descriptor - a dictionary containing a description of this peer.  It will have:
-#   uuid      - The peers raw uuid (${hwaddr}@${name}.[join ${protocols} .])
-#   peer      - A list container [list $ip $port] taken from [chan configure $chan -peer]
-#   name      - The name of the service, taken from the $uuid
-#   hwaddr    - The hwaddr of the service, taken from the $uuid
-#   protocols - A [list] of protocols taken from the $uuid ([list c t u])
-::oo::define ::cluster::service constructor { cluster descriptor } {
-  # Save a reference to our parent cluster so that we can communicate it as necessary.
+::oo::define ::cluster::service constructor { cluster proto chanID payload descriptor } {
+  # Save a reference to our parent cluster so that we can communicate with it as necessary.
   set CLUSTER $cluster
-  # These properties are static and may not be changed or manipulated throughout
-  # the lifecycle of a service.  We take them out of the $PROPS and save them directly
-  # to our services variables.
-  foreach e [list uuid peer hwaddr name] {
-    set [string toupper $e] [dict get $descriptor $e]
-    dict unset descriptor $e
-  }
+  # PROPS stores the services properties.  This will include things such as 
+  # "tags", "protocol properties", etc.  They are provided via heartbeat and/or
+  # discovery requests.  When props are received, they are merged into the previous
+  # properties unless we receive a FLUSH request (7).
+  set PROPS [dict create]
   
-  # Any remaining properties are saved within our services properties.
-  set PROPS $descriptor
+  set SERVICE_ID [dict get $payload sid]
+  set SYSTEM_ID  [dict get $payload hid]
+  set CHANNELS   [list 0]
+  set PROTOCOLS  [dict get $payload protocols]
+  set SOCKETS    [dict create]
   
-  # Is this peer local to this machine?
-  set LOCAL [::cluster::islocal $PEER]
-  set AFTER_ID {}
+  set ADDRESS    [dict get $descriptor address]
+  if { [dict exists $descriptor local] } {
+    set LOCAL [dict get $descriptor local] 
+  } else { set LOCAL [$CLUSTER is_local $ADDRESS] }
+  
+  # Confirm that we can validate this service using our standard validate method.  This is called
+  # directly by the cluster before parsing any payload after we have been created initially.
+  if { ! [my validate $proto $chanID $payload $descriptor] } { throw error "Failed to Validate Discovered Service" }
 }
 
 ::oo::define ::cluster::service destructor {
-  after cancel $AFTER_ID
-}
-
-# When we receive a heartbeat we will reset the services timeout handler.
-# Additionally, if we receive a payload, we will use it to set the settings
-# of the service.  
-#
-# A service will provide a payload with the heartbeat when responding to discovery
-# requests and when it wants to broadcast changes to its settings with the cluster.
-#
-# A service should never EXPECT it's settings will be honored, it is simply a means
-# to provide priorities and instructions for how it prefers to be handled.  The only
-# hard expectations are set by the available protocols and general configuration it has.
-::oo::define ::cluster::service method heartbeat { props } {
-  set LAST_HEARTBEAT [clock seconds]
-  my SetTimeout
-  my MergeProps $props
-}
-
-::oo::define ::cluster::service method SetTimeout {} {
-  after cancel $AFTER_ID
-  set AFTER_ID [after [$CLUSTER ttl] [namespace code [list my Timeout]]]
-}
-
-# When our service times out it will destroy itself.  This will occur
-# if we do not receive a heartbeat within the TTL Interval provided.
-::oo::define ::cluster::service method Timeout {} {
-  puts "SERVICE TIMEOUT! $UUID - $LOCAL - $LAST_HEARTBEAT"
   catch { $CLUSTER service_lost [self] }
-  [self] destroy
 }
 
-# When we want to merge new props with our service this method will handle
-# merging of each prop and handling any changes that may be required based
-# on the prop being changed.
-#
-# This will only occur once a service passes the content security protection
-# placed on the service / cluster.
-::oo::define ::cluster::service method MergeProps { props } {
-  if { $props eq {} } { return }
-  dict for {k v} $props {
-    if { [ my PropChanges $k $v ] } {
-      dict set PROPS $k $v
-    }
+::oo::define ::cluster::service method heartbeat { {data {}} } {
+  set LAST_HEARTBEAT [clock seconds]
+  if { $data ne {} } {
+    set PROPS [dict merge $PROPS $data] 
   }
 }
 
-# When a prop is changing we call this method to determine if any actions should
-# take place due to the changes being made.  If we return 0 then the changes will
-# be refused, otherwise the changes will be made once our evaluation completes.
-#
-# We can access the previous / current values by simply capturing $PROPS current value.
-#
-::oo::define ::cluster::service method PropChanges { prop nval } {
-  if { [dict exists $PROPS $prop] } { set pval [dict get $PROPS $prop] }
-  puts "Service Prop Changing: $prop ---> $nval"
-  dict set PROPS $prop $nval
-  return 1
+::oo::define ::cluster::service method resolve { what {filter {}} } {
+  if { $filter ne {} } { 
+    switch -glob -- $what {
+      *system*  - *hid  { if { $filter eq [my hid] } { return 1 } }
+      *service* - *sid  { if { $filter eq [my sid] } { return 1 } }
+      *ip - *address { if { $filter eq [my ip] } { return 1 } }
+      *tag - *tags   { if { $filter in $TAGS   } { return 1 } }
+    }
+  } else {
+    if { $what eq [my hid] || $what eq [my sid] } { return 1 }
+    if { $what in $TAGS } { return 1 }
+    if { $what eq [my ip] } { return 1 }
+    if { $what eq "localhost" && [my local] } { return 1 } 
+  }
+  return 0
 }
 
-# When we want to send a message to a service, we need to determine what the
-# best way to establish a communication channel may be.  We do this by using 
-# the properties of the service, the protocols it supports, and the protocols
-# that we support.
-#
-# If the protocols property is provided, we will attempt each given protocol in the
-# given order.  If it is empty, we will use all the protocols that this service supports
-# in the order they are defined by the service.
-#
-# When automatically determining the protocols to try:
-# $protocols will be in the order given by the services $uuid.  We will attempt
-# each that our local $CLUSTER supports until we reach the "cluster" protocol (c)
-# which we automatically must assume worked.  We will never attempt to send to
-# any protocol listed after our cluster protocol unless it is explicitly defined
-# within the send method.
-#
-# If $skip is defined, we expect it is a list of protocols that should not be attempted.
-::oo::define ::cluster::service method send { op {ruid {}} {data {}} {protocols {}} {skip {}} } {
-  if { $protocols eq {} } { set protocols [dict get $PROPS protocols] }
-  if { $ruid ne {} } { append op $ruid }
+::oo::define ::cluster::service method query { args } {
+  set query [lindex $args end]
+  set ruid  [lindex $args end-1]
+  set args  [lrange $args 0 end-2]
+  if { [dict exists $args -timeout] } {
+    
+  }
+  puts "Test Query"
+  set payload [$CLUSTER query_payload $ruid $query]
+  my send $payload
+}
+
+::oo::define ::cluster::service method send { payload {protocols {}} {allow_broadcast 1} } {
+  if { $protocols eq {} } { set protocols $PROTOCOLS }
+  # Encode the packet that we want to send to the cluster.
+  set packet [::cluster::packet::encode $payload]
+  set sent   {}
+  set attempts [list]
   foreach protocol $protocols {
-    # Should we skip this protocol?
-    if { $protocol in $skip } { continue }
+    if { $protocol in $attempts } { continue }
     # We attempt to send to each protocol defined.  If our send returns true, we
     # expect the send was successful and return the protocol that was used for the
     # communication.
     #
     # We include a reference to the protocol to ourselves so it can query any
     # information necessary to complete the request.
-    if { [$CLUSTER send $protocol $op $data [self]] } { 
-      puts "Sent to Service: $protocol $op $data | [self]"
-      return $protocol 
+    if { $protocol ni $PROTOCOLS } {
+      # Requested a protocol which this service does not say that it supports.
+      # We will simply ignore it for now
+      continue
+    } elseif { $protocol eq "c" && ! $allow_broadcast } {
+      # When we have specified that we should not broadcast we skip the cluster
+      # protocol
+      continue
     }
+    
+    # Obtain the reference for the protocol from our $cluster if it exists.
+    set proto [$CLUSTER protocol $protocol]
+    
+    if { $proto eq {} } { 
+      # This protocol is not supported by our local service.  We will move on to
+      # the next one.
+      continue
+    }
+    
+    if { [$proto send $packet [self]] } { return $protocol } else { lappend attempts $protocol }
+    
   }
   # If none of the attempted protocols were successful, we return an empty value
   # to the caller.
-  puts "Failed to Send to Service: [self] via $protocols - $op $data"
+  puts "Failed to Send to Service: [self] [string bytelength $packet]"
   return
 }
 
-# This method is called to get a list of properties that we want to be able to 
-# resolve with.
-::oo::define ::cluster::service method resolver {} {
-  return [list $NAME $HWADDR $UUID [lindex $PEER 0] {*}$[dict get $PROPS protocols]]
+::oo::define ::cluster::service method receive { proto chanID payload descriptor } {
+  #puts "[self] receives from $proto - $chanID"
+  set data {}
+  set PROTOCOLS [dict get $payload protocols]
+  set protocol  [$proto proto]
+  puts "Receiving via $protocol"
+  dict with payload {}
+  
+  if { [info exists tags] } { set TAGS $tags }
+  
+  # Did our partner provide us with a request uid?  If so, any reply will include the
+  # ruid so it can identify the request.
+  if { [info exists ruid] } { dict set response ruid $ruid } else { set response {} }
+  
+  # Did our partner request that we keep the channel alive?  If the property exists, we will
+  # send it with any reply that may be sent.
+  if { ! [info exists keepalive] } { 
+    set keepalive 0 
+  } else { dict set response keepalive $keepalive }
+  
+  switch -- $type {
+    0 {
+      # Disconnect
+      puts "SERVICE [self] DISCONNECTING"
+    }
+    1 {
+      # Beacon
+      puts "SERVICE HEARTBEAT"
+      my heartbeat $data
+    }
+    2 {
+      # Discovery
+      puts "DISCOVERY REQUESTED BY SERVICE"
+      # When we receive a discovery request from the service, we also treat it
+      # as-if it were a heartbeat.  The payload of heartbeats and discovery 
+      # conform to the same payloads (their properties).  Which we expect
+      # will be merged with other properties we have received from the service.
+      my heartbeat $data
+      # Once we have processed the heartbeat and the data that came with it,
+      # we will respond to the discovery request.  We will use the protocol
+      # data that we have received from the service to open a channel directly
+      # rather than broadcasting on every discovery request.
+      my send [$CLUSTER heartbeat_payload [list protoprops] 1 0 $response]
+    }
+    3 {
+      # Request
+    }
+    4 {
+      # Query
+      puts "QUERY REQUESTED WITH RUID: $response"
+      set context [dict merge $payload [dict create \
+        protocol $protocol
+      ]]
+      try {
+        dict set response data [my hook $payload query]
+      } on error {r} { dict set response error $r }
+      my send [$CLUSTER response_payload $response $channel] $protocol
+    }
+    5 {
+      # Response
+      # When a service provides us with a response to a query we will attempt to
+      # call the query objects event method with a reference to our service.
+      #
+      # If the query has already timed out, not will happen.
+      my heartbeat
+      if { ! [info exists ruid] } { return }
+      $CLUSTER query_response [self] $payload
+      # Close the connection automatically after giving our response
+      set keepalive 0
+    }
+    6 {
+      # Event
+    }
+    7 {
+      # Flush Props / Replace with received data
+      set PROPS $data
+    }
+  }
+  $proto done [self] $chanID $keepalive
+}
+
+::oo::define ::cluster::service method hook { context args } {
+  dict with context {}
+  return [$CLUSTER run_hook {*}$args]
 }
 
 # When we receive a payload from what appears to be the service, we will validate
 # against the service to determine if we should accept the payload or not.  We
 # return true/false based on the result.
-::oo::define ::cluster::service method validate { descriptor } {
-  set peer [dict get $descriptor peer]
-  if { $peer ne $PEER } {
-    if { [string equal [lindex $PEER 0] [lindex $peer 0]] } {
-      # We want to confirm that the message is received from the 
-      # same peer IP that this service was created as.
-      #
-      # TODO: Use other methods so that the IP of the service can
-      #       change due to DHCP / restarts / etc.
-      return 1
-    } else { return 0 }
-  } else { return 1 }
+::oo::define ::cluster::service method validate { proto chanID payload descriptor } {
+  dict with payload {}
+  
+  if { ! [info exists channel] || ! [info exists type] } { return 0 }
+  if { ! [info exists protocols] || "c" ni $protocols  } { return 0 }
+  if { ! [info exists sid] || ! [info exists hid] } { return 0 }
+  if { $sid ne $SERVICE_ID || $hid ne $SYSTEM_ID  } { return 0 }
+
+  if { [dict get $descriptor address] ne $ADDRESS } {
+    set ADDRESS [dict get $descriptor address]
+    if { [dict exists $descriptor local] } {
+      set LOCAL [dict get $descriptor local] 
+    } else {
+      set LOCAL [$CLUSTER is_local $ADDRESS]
+    }
+  }
+  
+  set prevChan [my socket [$proto proto]]
+  if { $prevChan ne $chanID } {
+    my ChannelEvent open $proto $chanID
+  }
+  
+  switch -- $channel {
+    0 {
+      # Broadcast - We always accept this
+    }
+    1 {
+      # System - We only accept from localhost
+      if { ! $LOCAL } { return 0 }
+    }
+    2 {
+      # LAN - Need to determine if this is coming from a Local Area Network client
+      puts "TO DO : ADD LAN CHANNEL!"
+      return 0
+    }
+    default {
+      # Received a Channel Message from Service : How do these rules work?
+    }
+  }
+
+  return 1
+}
+
+#$service event channel close $protocol $chanID
+::oo::define ::cluster::service method event { ns args } {
+  switch -nocase -glob -- $ns {
+    ch* - channel {
+      lassign $args action proto chanID
+      my ChannelEvent $action $proto $chanID
+    }
+  }
+}
+
+::oo::define ::cluster::service method ChannelEvent { action proto chanID } {
+  set protocol [$proto proto]
+  switch -nocase -glob -- $action {
+    cl* - close {
+      if { [dict exists $SOCKETS $protocol] && [dict get $SOCKETS $protocol] eq $chanID } {
+        dict unset SOCKETS $protocol
+      }
+    }
+    op* - open {
+      if { [dict exists $SOCKETS $protocol] && [dict get $SOCKETS $protcol] ne $chanID } {
+        # A new channel is opening but we still have a reference to an older one?
+        # We only allow one socket to each service per protocol - we call done on the previous
+        $proto done [self] [dict get $SOCKETS $protocol] 0
+      }
+      dict set SOCKETS $protocol $chanID
+    }
+  }
+}
+
+::oo::define ::cluster::service method socket { proto } { 
+  if { [dict exists $SOCKETS $proto] } {
+    return [dict get $SOCKETS $proto] 
+  }
+}
+
+::oo::define ::cluster::service method info {} {
+  return [dict create \
+    last_seen  $LAST_HEARTBEAT \
+    address    $ADDRESS \
+    props      $PROPS \
+    system_id  $SYSTEM_ID \
+    service_id $SERVICE_ID \
+    tags       $TAGS
+  ]
 }
 
 # Our objects accessors
-::oo::define ::cluster::service method ip     {} { lindex $PEER 0 }
-::oo::define ::cluster::service method props  {} { return $PROPS  }
-::oo::define ::cluster::service method uuid   {} { return $UUID   }
-::oo::define ::cluster::service method peer   {} { return $PEER   }
-::oo::define ::cluster::service method local  {} { return $LOCAL  }
-::oo::define ::cluster::service method name   {} { return $NAME   }
-::oo::define ::cluster::service method hwaddr {} { return $HWADDR }
+::oo::define ::cluster::service method ip     {} { return $ADDRESS }
+::oo::define ::cluster::service method props  {} { return $PROPS   }
+::oo::define ::cluster::service method tags   {} { return $TAGS    }
+::oo::define ::cluster::service method local  {} { return $LOCAL   }
+::oo::define ::cluster::service method hid    {} { return $SYSTEM_ID  }
+::oo::define ::cluster::service method sid    {} { return $SERVICE_ID }
 ::oo::define ::cluster::service method proto_props { protocol } {
   if { [dict exists $PROPS $protocol] } { return [dict get $PROPS $protocol] }
 }

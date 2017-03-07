@@ -15,6 +15,9 @@ the general behavior of a cluster to fit their security and/or communications ha
 - Linux / Unix
   - Requires [tuapi](http://chiselapp.com/user/rkeene/repository/tuapi/home)
 
+It is actually relatively easy to support other platforms or not require tuapi.  Just need
+to modify a few of the initial procs to give data such as LAN IP's and MAC Address.
+
 ## Key Concepts
 
 `cluster` aims to provide a lightweight modular framework for cluster discovery, communications, 
@@ -32,12 +35,12 @@ using the `-remote` configuration parameter.  Anything higher than 0 will begin 
 our beacons further out from the machine.
 
 When `-remote` is set to 0, communications will be ignored from any communications originating 
-from outside of our localhost.
+from outside of our localhost.  You may also use hooks to provide this type of security based on 
+the context of the cluster.
 
 #### Customizable & Extendable
 
 #### Custom Protocol Handlers
-
 
 ## Quick Example
 
@@ -48,62 +51,50 @@ a cluster and discovering the others.
 
 ```tcl
 package require cluster
-set cluster [cluster join -name service_one]
+set cluster [cluster join -tags [list service_one]]
 
-# Insecurely evaluate whatever we receive with C op
-$cluster hook op C receive {
-  try $data
+set myVar "Hello, Cluster!"
+
+# Insecurely evaluate whatever we receive a query.  Only
+# response to local services.
+$cluster hook query {
+  if { ! [my local] } { 
+    throw error "Only Local can Query" 
+  }
+  uplevel #0 [list try $data]
 }
 
 # Enter the event loop and allow cluster to work
 vwait _forever_
 
-# Sometime later...
-
-Hello, Foo!
-
-# And later...
-
-Hello, Bar!
-
 ```
 
 ```tcl
 package require cluster
-set cluster [cluster join -name service_two]
+set cluster [cluster join -tags [list service_two]]
 
-# Insecurely evaluate whatever we receive
-$cluster hook op C receive {
-  try $data
+proc response { event } {
+  lassign $event action query
+  switch -- $action {
+    start    { }
+    response { 
+      puts "Service Response: [$query result]"
+      # Hello, Cluster!
+    }
+    done     { }
+    timeout  { }
+    error    {
+      puts "Service Error: [$query error]"
+    }
+  }
 }
 
+$cluster hook service discovered {
+  # Query the discovered service
+  $cluster query -resolve $service -query {set ::myVar} -command response
+}
 # Enter the event loop and allow cluster to work
 vwait _forever_
-
-# Sometime later...
-
-Hello, Foo!
-```
-
-```tcl
-package require cluster
-set cluster [cluster join -name service_three]
-
-# Enter the event loop for a little while then check the results
-after 30000 { set _awhile_ 1 } ; vwait _awhile_
-
-set services [$cluster services]
-# ::*::00:1F:B8:2A:01:1F@service_two ; # truncated
-# ::*::00:1F:B8:2A:01:1F@service_one
-
-set ips [$cluster ips]
-# 192.168.1.60
-
-$cluster broadcast C { puts "Hello, Foo!" }
-
-# Send over tcp protocol to service_one
-
-$cluster sendto [$cluster resolve service_one] C { puts "Hello, Bar!" }
 
 ```
 
@@ -118,9 +109,23 @@ We can modify the behavior at each level by either changing values before they a
 or received, or throwing an error to cancel any further handling.
 
 
-#### `$cluster hook send`
+#### `$cluster hook evaluate send`
 
-#### `$cluster hook receive`
+#### `$cluster hook evaluate receive`
+
+### Channel Hooks
+
+#### `$cluster hook channel receive <channels>`
+
+### Evaluate Hooks
+
+#### `$cluster hook evaluate service`
+
+#### `$cluster hook evaluate receive`
+
+#### `$cluster hook evaluate send`
+
+> Called right after the 
 
 ### Protocol Hooks
 

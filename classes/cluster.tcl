@@ -1,28 +1,35 @@
 ::oo::define ::cluster::cluster {
-  variable ID NS UUID CONFIG AFTER_ID PROTOCOLS HOOKS EVENTS
+  variable ID NS SYSTEM_ID SERVICE_ID CONFIG PROTOCOLS HOOKS TAGS AFTER_ID
+  variable UPDATED_PROPS CHANNELS QID QUERIES
 }
 
 ::oo::define ::cluster::cluster constructor { id config } {
   # Strip any periods (.) from the name as they are not allowed.  We do this
   # instead of producing an error.
-  dict set config name [string map { {.} {} } [dict get $config name]]
+  namespace path [list ::cluster {*}[namespace path]]
   set ID       $id
-  set CONFIG   $config
-  set AFTER_ID {}
+  set QUERIES  [dict create]
   set HOOKS    [dict create]
-  set EVENTS   [dict create]
+  set TAGS     [dict get $config tags]
+  dict unset config tags
+  set CONFIG   $config
   set NS       ::cluster::clusters::${ID}
+  set AFTER_ID {}
+  set CHANNELS [dict create]
   namespace eval $NS {}
   namespace eval ${NS}::services {}
-  my BuildUUID
+  namespace eval ${NS}::queries  {}
+  set UPDATED_PROPS [list tags]
+  my BuildSystemID
   my BuildProtocols
-  my heartbeat 1
+  my heartbeat
   my discover
 }
 
 # We need to destroy our various objects in the appropriate order so they have
 # access to the pieces they may need to clean themselves up.
 ::oo::define ::cluster::cluster destructor {
+  after cancel $AFTER_ID
   if { [namespace exists ${NS}::services] } {
     # Delete the namespace holding all of our services attached to this cluster.
     namespace delete ${NS}::services
@@ -31,26 +38,24 @@
     # Delete the namespace holding all of our protocols
     namespace delete ${NS}::protocols
   }
+  if { [namespace exists ${NS}::queries] } {
+    # Delete the namespace holding our query objects
+    namespace delete ${NS}::queries 
+  }
   # Delete our entire namespace
   namespace delete ${NS}
 }
 
-# Use append instead of string cat for compatibility with older versions of tcl
-# A UUID takes the form of $hwaddr@${name}.[join $protocols .]
-# 00:1F:C5:85:65:25@dash-access.c.t
-::oo::define ::cluster::cluster method BuildUUID {} {
-  set UUID {}
-  append UUID [cluster hwaddr] @ [join [list \
-    [dict get $CONFIG name] {*}[dict get $CONFIG protocols]
-  ] .]
-  puts "UUID IS: $UUID"
+# Provide the desired system id which we will include with any packets that
+# we encode.
+::oo::define ::cluster::cluster method BuildSystemID {} {
+  set SYSTEM_ID  [::cluster::hwaddr]
+  set SERVICE_ID [shortid]
 }
 
 # Build any protocols that our cluster supports.  These will be used to build
 # the communication channels with the clients.  We may have a mix of protocols
-# supported by a cluster as well. We expect a cluster and tcp protocol in the
-# minimum but other protocols may be supported.  We would need to run a service
-# query to discover how to communicate with them.
+# supported by a cluster as well.
 #
 # We expect any supported protocols to be classes defined in the ::cluster::protocol::$protocol
 # command space where the protocol will receive [self] $ID $config arguments and should 
@@ -68,99 +73,163 @@
       throw error "Unknown Cluster Protocol Requested: $protocol"
     }
   }
-  #
 }
 
 # We send a heartbeat to the cluster at the given interval.  Any listening services
 # will reset their timers for our service as they know we still exist.s
-::oo::define ::cluster::cluster method heartbeat { {includeprops 0} } {
-  after cancel $AFTER_ID
-  set AFTER_ID [ after [dict get $CONFIG heartbeat] [namespace code [list my heartbeat]] ]
-  if { $includeprops } {
-    my send c ! [my ProtoProps]
-  } else { my send c ! }
+::oo::define ::cluster::cluster method heartbeat { {props {}} {tags 0} {channel 0} } {
+  try {
+    if { $channel == 0 } {
+      # We only reset the heartbeat timer when broadcasting our heartbeat
+      after cancel $AFTER_ID
+      set AFTER_ID [ after [dict get $CONFIG heartbeat] [namespace code [list my heartbeat]] ]
+      # Build the payload for the broadcast heartbeat - be sure we broadcast any updated
+      # props to the cluster.
+      set props [lsort -unique [concat $UPDATED_PROPS $props]]
+      set UPDATED_PROPS [list]
+      my CheckServices
+    }
+    if { "tags" in $props } { set tags 1 }
+    set payload [my heartbeat_payload $props $tags $channel]
+    my broadcast $payload
+  } on error {result options} {
+    puts "Heartbeat Error: $result"
+  }
+}
+
+::oo::define ::cluster::cluster method CheckServices {} {
+  # Check through each of our services to see if they have expired
+  foreach service [my services] {
+    try {
+      set info [$service info]
+      if { [dict exists $info last_seen] } { 
+        set lastSeen [expr { [clock seconds] - [dict get $info last_seen] } ]
+        if { $lastSeen > [dict get $CONFIG ttl] } { catch { $service destroy } }
+      } else { $service destroy }
+    } on error {result options} {
+      puts "Service Check Error: $result"
+      catch { $service destroy }
+    }
+  }
+}
+
+::oo::define ::cluster::cluster method is_local { address } {
+  if { $address in [::cluster::local_addresses] } { return 1 } else { return 0 }
 }
 
 # Called by any of our supported protocols to parse / handle a received payload
 # from a remote/local client.  We will check to make sure the given service passes
 # our Security Policies and pass the payload through to our handlers if it does.
-#
-# Payloads will follow the protocol:
-#   $op$ruid $UUID $payload
-#
-# Payload Parameters:
-#   op      -   Our op code routes the payload to appropriate handler.
-#   ruid    -   A RUID identifies a request so we can pass it through to the
-#               response allowing asynchronous resolution. If any service responds
-#               to a received payload, the service will expect this value included
-#               as the ruid.
-#   uuid    -   UUID of the sender $hwaddr@$port - we further identify the
-#               sender by reading the meta from the service directly.
-#   payload -   Any payload that was included with the request.
-#
-::oo::define ::cluster::cluster method receive {proto chan data} {
-  set data [string trim $data]
-  if { $data eq {} } { return }
-  lassign $data opdata uuid payload
-  # We ignore messages from ourselves
-  if { $uuid eq $UUID } { return }
-  # What are we receiving?
-  set op   [string index $opdata 0]
-  # What is the request unique id?
-  set ruid [string range $opdata 1 end]
-  # Who are we receiving it from? [list ip port]
-  set peer [chan configure $chan -peer]
-  # What is the service?  Does it pass Security Policy?
-  set service [my service $uuid $peer]
-  
-  # Evaluate the cluster receive hooks
-  try [my Hook protocol $proto receive] on error {r} { return }
-  try [my Hook receive] on error {r} { return }
-  
-  puts "Receive Communication from $uuid :"
-  puts "Protocol: $proto | OP: $op | RUID: $ruid | Peer: $peer | Service: $service"
-  
-  # If we have a valid service then we will parse the received data.
-  # A valid service will have been validated and accepted based on the
-  # initializer rules (local/remote, ip filters/port filters, etc)
-  if { $service ne {} } {
-    # ! - Heartbeat
-    # ? - Discovery Request
-    # * - Other Handlers are handled by the handlers
-    switch -- $op {
-        ! { 
-          # When we receive a heartbeat we will simply reset the ttl for the 
-          # service by sending it a heartbeat directly.
-          $service heartbeat $payload
-      } ? { 
-          # When we receive a discovery request, we send our response
-          # to the service directly based on the protocol qos it provides.
-          #
-          # If a discovery request contains a payload, we expect it to be a 
-          # list of services that it is currently aware of.  If we are within
-          # the given payload, we will not send it a response.  
-          #
-          # A response to a discovery request includes extra information about 
-          # ourselves such as protocol properties.
-          if { $payload ne {} && $UUID in $payload } { return }
-          $service send ! $ruid [my ProtoProps]
-      } default {
-          # If we don't define a handler above, we will only continue
-          # further if the given $op has a defined handler.
-          try [my Hook op $op receive] on error {r} { return }
+::oo::define ::cluster::cluster method receive { proto chanID packet } {
+  try {
+    # Trim then check to make sure the data is not empty. If it is, cancel evaluation.
+    if { [string trim $packet] eq {} } { return }
+    
+    # Get information about the requester from the protocol
+    set descriptor [ $proto descriptor $chanID ]
+    
+    if { [dict get $CONFIG remote] == 0 } {
+      # When we have defined that we only wish to work with local scripts, we will 
+      # check and immediately ignore any data received from outside the localhost
+      if { ! [dict exists $descriptor local] } {
+        if { ! [my is_local [dict get $descriptor address]] } { 
+          return 
+        } else { dict set descriptor local 1 }
+      } else {
+        if { ! [dict get $descriptor local] } { return }
       }
+    }
+    
+    # Attempt to decode the received packet.  
+    # An empty payload will be returned if we fail to decode the packet for any reason.
+    set payload [::cluster::packet::decode $packet [self]]
+    if { $payload eq {} || ! [dict exists $payload sid] || [dict get $payload sid] eq $SERVICE_ID } {
+      # Ignore empty payloads or payloads that we receive from ourselves.
+      return
+    }
+
+    # Called before anything is done with the received payload but after it is
+    # decoded. $payload may be modified if necessary before it is further evaluated.
+    try [my run_hook evaluate receive] on error {r} { return }
+    
+    try [my run_hook channel receive [dict get $payload channel]] on error {r} { return }
+    
+    #lassign $payload type rchan op ruid system_id service_id protocols flags data
+    
+    # Provide the data to the matching service to handle and parse.  Create the
+    # service if it does not exist.  
+    # - If we receive an empty value in return, the received data has been rejected.
+    set service [my service $proto $chanID $payload $descriptor]
+    if { $service eq {} } { return }
+    
+    set protocol [$proto proto]
+    if { $protocol ne "c" } {
+      my event channel receive $protocol $chanID $service
+    }
+    
+    $service receive $proto $chanID $payload $descriptor
+    
+  } on error {result options} {
+    ::onError $result $options "While Parsing a Received Cluster Packet"
+  }
+}
+
+# A filter is a list of services which should parse / receive the given payload.
+# It is used as an insecure way of routing broadcasted data to specific clients 
+# When we have not yet created a channel.  For example, it can be useful to request
+# a group of clients to join a specific channel.
+::oo::define ::cluster::cluster method check_filter { filter } {
+  puts "Checking Filter: $filter"
+  if { $SERVICE_ID in $filter } { return 1 }
+  if { $SYSTEM_ID in $filter } { return 1 }
+  foreach tag $TAGS { if { $tag in $filter } { return 1 } }
+  puts "Filter Does Not Match, Ignore Request"
+  return 0
+}
+
+# Gather the public properties of each protocol that we support.
+::oo::define ::cluster::cluster method ProtoProps { {pdict {}} } {
+  dict for { protocol ref } $PROTOCOLS {
+    set props [$ref props]
+    if { $props ne {} } { dict set pdict $protocol $props }
+  }
+  return $pdict
+}
+
+::oo::define ::cluster::cluster method event {ns event proto args} {
+  switch -nocase -glob -- $ns {
+    cha* - channel {
+      my ChannelEvent $event $proto {*}$args
     }
   }
 }
 
-# Gather the public properties of each protocol that we support.
-::oo::define ::cluster::cluster method ProtoProps {} {
-  set protoProps [dict create]
-  dict for { protocol ref } $PROTOCOLS {
-    set props [$ref props]
-    if { $props ne {} } { dict set protoProps $protocol $props }
+::oo::define ::cluster::cluster method ChannelEvent {event proto {chanID {}} args} {
+  switch -nocase -glob -- $event {
+    o* - opens {
+      lassign $args service
+      dict set CHANNELS $chanID [dict create \
+        proto    $proto \
+        created  [clock seconds]
+      ]
+      if { $service ne {} } { 
+        dict set CHANNELS $chanID service $service
+        $service event channel open $proto $chanID
+      }
+    }
+    c* - close {
+      if { [dict exists $CHANNELS $chanID service] } {
+        set service [dict get $CHANNELS $chanID service]
+      } else { lassign $args service }
+      if { $service ne {} } { $service event channel close $proto $chanID }
+      catch { dict unset CHANNELS $chanID }
+    }
+    r* - receive {
+      lassign $args service
+      if { $service ne {} } { dict set CHANNELS $chanID service $service }
+    }
   }
-  return $protoProps
+  return
 }
 
 # Whenever we receive data, we will check to see if the service already exists
@@ -170,53 +239,51 @@
 # If a service should not be allowed to communicate with us, we will return an 
 # empty string at which point the command should cease to parse the received
 # payload immediately.
-::oo::define ::cluster::cluster method service { uuid peer } {
-
-  # Parse the UUID and split it into its parts so that we can properly
-  # find our service object.
-  lassign [::cluster::split_uuid $uuid] hwaddr name protocols
-  set service ${NS}::services::${hwaddr}@${name}
+::oo::define ::cluster::cluster method service { proto chanID payload descriptor } {
   
-  # The peer descriptior which describes the peer that we are receiving a
-  # payload from.  This includes a mix of $uuid data as well as the data 
-  # we parsed from the socket itself.
-  set descriptor [dict create \
-    uuid      $uuid   \
-    peer      $peer   \
-    name      $name   \
-    hwaddr    $hwaddr \
-    protocols $protocols
-  ]
+  set system_id  [dict get $payload hid]
+  set service_id [dict get $payload sid]
+  
+  # Added Security - if the system id does not match, we dont parse it when only
+  # accepting local.
+  if { [dict get $CONFIG remote] == 0 && $system_id ne $SYSTEM_ID } { return }
+  #lassign $payload type rchan op ruid system_id service_id protocols flags data
+  
+  set uuid ${service_id}@${system_id}
+  
+  set service ${NS}::services::$uuid
+  
+  set serviceExists [expr { [info commands $service] ne {} }]
   
   # Call our service eval hook
-  try [my Hook service eval] on error {r} { return }
+  try [my run_hook evaluate service] on error {r} { return }
   
-  if { [info commands $service] ne {} } {
+  if { [string is true $serviceExists] } {
     # If our service already exists, we will validate it against the
     # received data to determine if we want to allow communication
     # with the service.  If we validate, then we will return the 
     # reference to the service to our handler.
-    try [my Hook service validate] on error {r} { return }
-    if { [$service validate $descriptor] } { return $service }
+    try [my run_hook service validate] on error {r} { return }
+    
+    if { [$service validate $proto $chanID $payload $descriptor] } { return $service }
   } else {
     # If we have never seen this service, we will create it.  We will check
     # it against our security policies and retain it if it is a service we 
     # are allowed to communicate with.  Otherwise it will be destroyed.
-    # Call our op receive hook
-    try [my Hook service found] on error {r} { return }
     try {
-      return [::cluster::service create $service [self] $descriptor]
+      set service [::cluster::service create $service [self] $proto $chanID $payload $descriptor]
+      try [my run_hook service discovered] on error {r} { return }
+      return $service
     } on error {r} {
       puts "Service Creation Error: $r"
       # Do nothing on creation error
     }
   }
   return
-  
 }
 
 ::oo::define ::cluster::cluster method service_lost { service } {
-  try [my Hook servoce lost] on error {r} { return }
+  try [my run_hook service lost] on error {r} { return }
 }
 
 # Currently we just save the hooks without validating them as a supported hook.
@@ -231,108 +298,242 @@
 # When we want to retrieve the body for a given hook, we call this method with
 # the desired hook key.  We will either return {} or the given hooks body to be
 # evaluated.
-::oo::define ::cluster::cluster method Hook args {
+::oo::define ::cluster::cluster method run_hook args {
   if { $HOOKS eq {} } { return }
-  tailcall ::cluster::ifhook $HOOKS {*}$args
-}
-
-# When we want to call a given event, this will be called with the event that has
-# occurred. If a callback has been registered on the event, we call the lambda.
-::oo::define ::cluster::cluster method Event args {
-  if { $EVENT eq {} } { return }
-  tailcall ::cluster::ifhook $EVENTS {*}$args
+  tailcall try [::cluster::ifhook $HOOKS {*}$args]
 }
 
 
 # Get our scripts UUID to send in payloads
-::oo::define ::cluster::cluster method uuid {} { return $UUID }
+::oo::define ::cluster::cluster method uuid {} { return ${SERVICE_ID}@${SYSTEM_ID} }
 
 # Retrieve how long a service should be cached by the protocol.  If we do not
 # hear from a given service for longer than the $ttl value, the service will be 
 # removed from our cache.
 ::oo::define ::cluster::cluster method ttl  {} { return [dict get $CONFIG ttl] }
 
+::oo::define ::cluster::cluster method protocols {} { return [dict get $CONFIG protocols] }
+
+::oo::define ::cluster::cluster method protocol { protocol } {
+  if { [dict exists $PROTOCOLS $protocol] } {
+    return [dict get $PROTOCOLS $protocol] 
+  }
+}
+
+::oo::define ::cluster::cluster method props args {
+  set props [dict create]
+  foreach prop $args {
+    if { $prop eq {} } { continue }
+    switch -nocase -glob -- $prop {
+      protop* - protoprops { set props [my ProtoProps $props] }
+    }
+  }
+  return $props
+}
+
 # A list of all the currently known services
 ::oo::define ::cluster::cluster method services {} {
   return [info commands ${NS}::services::*]
 }
 
-::oo::define ::cluster::cluster method names {} {
-  return [lmap e [my services] { $e name }]  
+::oo::define ::cluster::cluster method known_services {} { llength [my services] }
+
+::oo::define ::cluster::cluster method config { args } {
+  return [dict get $CONFIG {*}$args]
 }
 
-::oo::define ::cluster::cluster method ips {} {
-  set ips [list]
-  foreach service [my services] {
-    set ip [$service ip]
-    if { $ip ni $ips } { lappend ips $ip }
+::oo::define ::cluster::cluster method flags {} { 
+  return [ list [my known_services] 0 0 0 ] 
+}
+
+::oo::define ::cluster::cluster method type { type } {
+  if { ! [string is entier -strict $type] } {
+    switch -nocase -glob -- $type {
+      discon* - close { set type 0 }
+      bea* - heart*   { set type 1 }
+      discov* - find  { set type 2 }
+      req* - com*     { set type 3 }
+      q*              { set type 4 }
+      res* - answ*    { set type 5 }
+      event           { set type 6 }
+      default { throw error "Unknown Type: $type" }
+    } 
   }
-  return $ips
+  return $type
 }
 
-::oo::define ::cluster::cluster method macs {} {
-  set macs [list]
-  foreach service [my services] {
-    set mac [$service hwaddr]
-    if { $mac ni $macs } { lappend macs $mac }
-  }
-  return $macs
-}
-
-# Get a reference to a service by the name.  We should eventually start using
-# an indexed dict to get these values rather than querying each service looking
-# for it.
-#
-# We resolve with the services "name" "ip" "uuid" "protocols" 
-#
-# If $all is true, return all matching services.
-::oo::define ::cluster::cluster method resolve { name {all 0} } {
-  set services [list]
-  foreach service [my services] {
-    if { $name in [$service resolver] } { 
-      lappend services $service
-      if { ! $all } { break }
+::oo::define ::cluster::cluster method channel { channel } {
+  if { ! [string is entier -strict $channel] } {
+    switch -nocase -glob -- $channel {
+      broadcast - br* { set type 0 }
+      system    - sy* { set type 1 }
+      lan - lo* - la* { set type 2 }
+      default { throw error "Unknown Channel: $channel" }
     }
   }
-  return $services
-}
-
-# When we want to send to a specific protocol, we call this to retrieve the
-# appropriate protocol reference and forward the request.  If the protocol attempted
-# is not supported by our cluster, we will immediately return "false" (0) to the 
-# caller.
-::oo::define ::cluster::cluster method send { proto op {data {}} {service {}} } {
-  if { [dict exists $PROTOCOLS $proto] } {
-    try [my Hook op [string index $op 0] send] on error {r} { return 0 }
-    try [my Hook protocol $proto send] on error {r} { return 0 }
-    try [my Hook send] on error {r} { return 0 }
-    # Send to the protocol
-    tailcall [dict get $PROTOCOLS $proto] send $op $data $service
-  } else { return 0 }
-}
-
-::oo::define ::cluster::cluster method broadcast { op {data {}} } {
-  return [ my send c $op $data ]
-}
-
-# Send to one or more services 
-::oo::define ::cluster::cluster method sendto { services op  {data {}} {ruid {}} } {
-  set sent [list]
-  foreach service $services {
-    set resolved [my resolve $service 1]
-    foreach rservice $resolved {
-      if { $rservice ni $sent } {
-        try { $rservice send $op $ruid $data } on error {result} {
-          puts "Failed to Send to Service: $rservice - $result"
-        }
-        lappend sent $rservice
-      }
-    }
-  }
+  return $channel
 }
 
 # Send a discovery probe to the cluster.  Each service will send its response
 # based on the best protocol it can find. 
-::oo::define ::cluster::cluster method discover {} {
-  my send c ?
+::oo::define ::cluster::cluster method discover { {ruid {}} {channel 0} } {
+  my variable LAST_DISCOVERY
+  if { ! [info exists LAST_DISCOVERY] } { set LAST_DISCOVERY [clock seconds] } else {
+    set now [clock seconds]
+    if { ( $now - $LAST_DISCOVERY ) <= 30 } {
+      # We do not allow discovery more than once for every 30 seconds.
+      return 0
+    } else { set LAST_DISCOVERY $now }
+  }
+  return [ my broadcast [ my discovery_payload [list protoprops] 1 $channel ] ]
 }
+
+# Broadcast to the cluster.  This is a shortcut to send to the cluster protocol.
+::oo::define ::cluster::cluster method broadcast { payload } {
+  set proto [dict get $PROTOCOLS c] 
+  try [my run_hook broadcast] on error {r} { return 0 }
+  return [ $proto send [::cluster::packet::encode $payload] ]
+}
+
+::oo::define ::cluster::cluster method query { args } {
+  if { [dict exists $args -id] } {
+    set qid [dict get $args -id] 
+  } else { 
+    set qid [my QueryID] 
+    dict set args -id $qid
+  }
+  
+  set query ${NS}::queries::$qid
+  if { [info commands $query] ne {} } {
+    # When we have a query which matches a previously created query
+    # that has not yet timed out we will force it to finish first.
+    $query destroy
+  }
+  
+  try {
+    set query [::cluster::query create $query [self] {*}$args]
+  } trap NO_SERVICES {result} {
+    return
+  } on error {result options} {
+    puts "QUERY CREATION ERROR: $result"
+    return
+  }
+  
+  dict set QUERIES $qid $query
+  
+  return $query
+}
+
+::oo::define ::cluster::cluster method QueryID {} {
+  return [format {q%s%s#%s} \
+    [string index $SERVICE_ID 0] \
+    [string index $SERVICE_ID 2] \
+    [string index $SERVICE_ID end] \
+    [::cluster::query_id]
+  ]
+}
+
+# Called by a service when it wants to provide a response to a query object.
+::oo::define ::cluster::cluster method query_response { service payload } {
+  if { [dict exists $payload ruid] } {
+    set ruid [dict get $payload ruid]
+    if { [dict exists $QUERIES $ruid] && [info commands [dict get $QUERIES $ruid]] ne {} } {
+      try {
+        return [ [dict get $QUERIES $ruid] event response $service $payload ] 
+      } on error {result} {
+        puts "QUERY REQUEST ERROR: $result"
+        return 0
+      }
+    } else { return 0 }
+  } else { return 0 }
+}
+
+::oo::define ::cluster::cluster method query_done { qid } {
+  if { [dict exists $QUERIES $qid] } { dict unset QUERIES $qid }
+}
+
+# Send a payload to the given service(s).  Optionally provide a list of protocols
+# which we want to send to if possible.  This will be matched against each services
+# protocols to determine the best method of communication to utilize.
+::oo::define ::cluster::cluster method send { services payload {protocols {}} args } {
+  set sent   [list]
+  set failed [list]
+  foreach service $services {
+    set rservices [my resolve $service]
+    foreach resolved $rservices {
+      if { $resolved in $sent || $resolved in $failed } { continue }
+      try { 
+        set protocol [ $resolved send $payload $protocols ]
+        if { $protocol ne {} } {
+          lappend sent $resolved
+        } else {
+          if { $resolved ni $failed } { lappend failed $resolved }
+        }
+      } on error {result} {
+        puts "Failed to Send to Service $service | $result  \n Payload: $payload"
+      }
+    }
+  }
+  return [list $sent $failed]
+}
+
+# Resolve services by running a search against each $arg to return the 
+# filtered services which match every arg. Resolution is a simple "tag-based"
+# search which matches against a services given tags.  By default a service will
+# resolve with:
+#   $ip       - The IP of the Service
+#   $name     - The name of the Service
+#   $tags     - Any of the tags defined by the service
+#   localhost - If the service is local it will resolve with "localhost"
+# set services [$cluster resolve localhost my_service]
+::oo::define ::cluster::cluster method resolve args {
+  set services [my services]
+  foreach filter $args {
+    if { $services eq {} } { break }
+    set services [lmap e $services { 
+      if { [string match "::*" $filter] || [string is true -strict [ $e resolve $filter ]] } {
+        set e
+      } else { continue }
+    }]
+  }
+  return $services
+}
+
+# Tags are sent to clients to give them an idea for what each service provides or
+# wants other services to be aware of.  Tags are sent only when changed or when requested.
+::oo::define ::cluster::cluster method tags { {action {}} args } {
+  if { $action eq {} } { return $TAGS }
+  set prev_tags $TAGS
+  if { [string equal [string index $action 0] -] } {
+    set action [string trimleft $action -]
+  } else {
+    set args [list $action {*}$args]
+    set action {}
+  }
+  if { $args ne {} } {
+    switch -- $action {
+      append { lappend TAGS {*}$args }
+      remove { 
+        foreach tag $TAGS {
+          set TAGS [lsearch -all -inline -not -exact $TAGS $tag]
+        }
+      }
+      replace - default { set TAGS $args }
+    }
+  }
+  try [my run_hook tags update] on error {r} {
+    # If we receive an error during the hook, we will revert to the previous tags
+    set TAGS $prev_tags
+  }
+  if { $prev_tags ne $TAGS } {
+    # If our tags change, our change hook will fire
+    set UPDATED_PROPS [concat $UPDATED_PROPS [list tags]]
+    try [my run_hook tags changed] on error {r} {
+      # We don't do anything if this produces error, use update for that.  This
+      # should be used when a tag update is accepted, for example if we wanted to
+      # then broadcast to the cluster with our updated tags.
+    }
+  }
+  return $TAGS
+}
+

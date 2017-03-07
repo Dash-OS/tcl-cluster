@@ -17,22 +17,29 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 }
 
 ::oo::define ::cluster::protocol::c constructor { cluster id config } {
-  set ID       $id
-  set CONFIG   $config
-  set CLUSTER  $cluster
+  set ID      $id
+  set CONFIG  $config
+  set CLUSTER $cluster
   my CreateServer
 }
 
 ::oo::define ::cluster::protocol::c destructor {
-  chan close $SOCKET
+  catch { chan close $SOCKET }
 }
+
+::oo::define ::cluster::protocol::c method proto {} { return c }
+::oo::define ::cluster::protocol::c method props {} {}
 
 # Join our UDP Cluster.  This is simply a multi-cast socket with "reuse" so that
 # multiple clients on the same machine can communicate with us using the given
 # cluster port.
 ::oo::define ::cluster::protocol::c method CreateServer {} {
   dict with CONFIG {}
+  if { [info exists SOCKET] } {
+    catch { chan close $SOCKET }
+  }
   set SOCKET [udp_open $port reuse]
+  set PORT   $port
   chan configure $SOCKET  \
     -buffering   full     \
     -blocking    0        \
@@ -47,28 +54,43 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # receive from any other protocol.  Since we can call [chan configure $chan -peer]
 # we can still apply our Security Policies against it if required.  
 ::oo::define ::cluster::protocol::c method Receive {} {
-  set data [read $SOCKET]
-  $CLUSTER receive c $SOCKET $data
+  if { [chan eof $SOCKET] } {
+    catch { chan close $SOCKET }
+    after 0 [namespace code [list my CreateServer]]
+  }
+  set packet [read $SOCKET]
+  $CLUSTER receive [self] $SOCKET $packet
 }
-
-# This protocol has no props that need to be shared.
-::oo::define ::cluster::protocol::c method props {} {}
 
 # When we want to send data to this protocol we will call this with the
 # service that we are wanting to send the payload to. We should return 
 # 1 or 0 to indicate success of failure.
-::oo::define ::cluster::protocol::c method send { op data service } {
+::oo::define ::cluster::protocol::c method send { packet {service {}} } {
   try {
-    set payload [list $op [$CLUSTER uuid]]
-    if { $data ne {} } { lappend payload $data }
-    puts $SOCKET $payload
-    chan flush $SOCKET
+    if { [string bytelength $packet] > 0 } {
+      puts $SOCKET $packet
+      chan flush $SOCKET
+    }
   } on error {result options} {
-    ::onError $result $options "While Sending to Cluster Protocol: $op $data"
-    return 0
+    catch { my CreateServer }
+    try {
+      puts $SOCKET $packet
+    } on error {result options} {
+      ::onError $result $options "While Sending to the Cluster"
+      return 0
+    }
   }
   return 1
 }
 
-::oo::define ::cluster::protocol::c method port {} { return $PORT }
+# Called by our service when we have finished parsing the received data. It includes
+# information as-to how the completed data should be parsed.
+# Cluster ignores any close requests due to no keep alive.
+::oo::define ::cluster::protocol::c method done { service chanID keepalive {response {}} } {}
 
+::oo::define ::cluster::protocol::c method descriptor { chanID } {
+  return [ dict create \
+    address [lindex [chan configure $chanID -peer] 0]  \
+    port    $PORT
+  ]
+}

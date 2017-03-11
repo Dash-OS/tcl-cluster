@@ -1,4 +1,3 @@
-package require unix_sockets
 # This example shows the (u) (Unix Sockets) protocol handler for the cluster-comm package.
 # A protocol is a class which provides a translation of a protocol so that we can
 # communicate successfully with it with cluster-comm. 
@@ -6,6 +5,9 @@ package require unix_sockets
 # A protocol must generally define both a SERVER and a CLIENT handler.  For our 
 # server, we expect to listen to connections from clients and pass them to our
 # cluster so it can be properly handled.
+
+package require unix_sockets
+
 if { [info commands ::cluster::protocol::u] eq {} } {
   ::oo::class create ::cluster::protocol::u {}
 }

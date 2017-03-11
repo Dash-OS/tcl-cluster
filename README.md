@@ -40,6 +40,13 @@ When `-remote` is set to 0, communications will be ignored from any communicatio
 from outside of our localhost.  You may also use hooks to provide this type of security based on 
 the context of the cluster.
 
+#### Lightweight Binary Wire Protocol
+
+In order to make the cluster communication as fast and light-weight as possible, a special 
+binary wire protocol is utilized (bpacket) which resembles [Protocol Buffers](https://developers.google.com/protocol-buffers/) 
+which a few modifications.  In general this should be anywhere from 30-60% smaller than using JSON or 
+similar (depending on the type of packet being sent).
+
 #### Customizable & Extendable
 
 `cluster` provides hooks that allow you each member to intercept evaluation at different 

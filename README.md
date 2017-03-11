@@ -20,8 +20,6 @@ the general behavior of a cluster to fit their security and/or communications ha
 It is actually relatively easy to support other platforms or not require tuapi.  Just need
 to modify a few of the initial procs to give data such as LAN IP's and MAC Address.
 
----
-
 ## Key Concepts
 
 `cluster` aims to provide a lightweight modular framework for cluster discovery, communications, 
@@ -68,8 +66,6 @@ It is extremely easy to provide new protocols that cluster can utilize.  Simply 
 general template provided by the included protocols.  Out of the box we support [UDP](https://sourceforge.net/projects/tcludp/), 
 [TCP](https://www.tcl.tk/man/tcl8.6/TclCmd/socket.htm), and [Unix Sockets](https://sourceforge.net/projects/tcl-unixsockets/).  
 
----
-
 ## Simple Service Discovery
 
 Below we see a simple example of using `cluster` where we simply join the cluster
@@ -109,8 +105,6 @@ $cluster hook service discovered {
 vwait _forever_
 
 ```
-
----
 
 ## Queries
 
@@ -205,8 +199,6 @@ vwait _forever_
 
 ```
 
----
-
 ## `cluster` API Reference 
 
 The top-level API is used to join a given cluster.
@@ -228,6 +220,7 @@ to utilize the default values.
 | -protocols    | List    | No         | t c             | What protocols do we want to support for this member?  |
 | -$proto_id    | Dict    | Yes*       |                 | This is only required when providing custom protocols. |
 
+> More Information on each argument coming soon...
 
 ---
 
@@ -262,6 +255,8 @@ dict.
 
 #### $cluster send *...args*
 
+> More Information Coming Soon...
+
 ---
 
 #### $cluster query *...args*
@@ -290,6 +285,8 @@ resolution process.
 ---
 
 #### $cluster resolve_self
+
+> More Information Coming Soon...
 
 ---
 
@@ -339,9 +336,13 @@ a heartbeat or communication from it).
 
 #### $cluster uuid
 
+> More Information Coming Soon...
+
 ---
 
 #### $cluster hook
+
+> More Information Coming Soon...
 
 ---
 
@@ -349,53 +350,79 @@ a heartbeat or communication from it).
 
 #### $service resolve
 
+> More Information Coming Soon...
+
 ---
 
 #### $service resolver
+
+> More Information Coming Soon...
 
 ---
 
 #### $service query
 
+> More Information Coming Soon...
+
 ---
 
 #### $service send
+
+> More Information Coming Soon...
 
 ---
 
 #### $service info
 
+> More Information Coming Soon...
+
 ---
 
 #### $service ip
+
+> More Information Coming Soon...
 
 ---
 
 #### $service props
 
+> More Information Coming Soon...
+
 ---
 
 #### $service tags
+
+> More Information Coming Soon...
 
 ---
 
 #### $service local
 
+> More Information Coming Soon...
+
 ---
 
 #### $service hid
+
+> More Information Coming Soon...
 
 ---
 
 #### $service sid
 
+> More Information Coming Soon...
+
 ---
 
 #### $service last_seen
 
+> More Information Coming Soon...
+
 ---
 
 #### $service proto_props
+
+> More Information Coming Soon...
 
 ---
 

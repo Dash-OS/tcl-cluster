@@ -61,7 +61,7 @@ general template provided by the included protocols.  Out of the box we support 
 
 ## Quick Example
 
-Below we see a simple example of using cluster where we simply join the cluster
+Below we see a simple example of using `cluster` where we simply join the cluster
 and register a hook to inform us whenever a new service has been discovered.
 
 Running this on two different shells (on the same system for now), you should

@@ -187,9 +187,7 @@ vwait _forever_
 
 ```
 
-## Commands Reference
-
-### `$cluster`
+## `$cluster` Commands Reference
 
 #### `$cluster heartbeat`
 
@@ -230,7 +228,7 @@ vwait _forever_
 
 #### `$cluster hook`
 
-### `$service`
+## `$service` Commands Reference
 
 #### `$service resolve`
 

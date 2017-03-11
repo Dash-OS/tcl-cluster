@@ -1,5 +1,7 @@
 # tcl cluster
 
+**UNFINISHED (But Working)**
+
 `cluster` is a tcl package which provides a simple light-weight framework for
 providing inter-process and inter-machine discovery and communications.  
 
@@ -44,24 +46,19 @@ the context of the cluster.
 
 ## Quick Example
 
-Lets show the simplest possible example by showing three separate tclsh sessions joining
-a cluster and discovering the others.
+Below we see a simple example of using cluster where we simply join the cluster
+and register a hook to inform us whenever a new service has been discovered.
 
-
+Running this on two different shells (on the same system for now), you should
+see the two shells discovered each other.
 
 ```tcl
+
 package require cluster
 set cluster [cluster join -tags [list service_one]]
 
-set myVar "Hello, Cluster!"
-
-# Insecurely evaluate whatever we receive a query.  Only
-# response to local services.
-$cluster hook query {
-  if { ! [my local] } { 
-    throw error "Only Local can Query" 
-  }
-  uplevel #0 [list try $data]
+$cluster hook service discovered {
+  puts "New Service Discovered: $service"
 }
 
 # Enter the event loop and allow cluster to work
@@ -70,29 +67,14 @@ vwait _forever_
 ```
 
 ```tcl
+
 package require cluster
 set cluster [cluster join -tags [list service_two]]
 
-proc response { event } {
-  lassign $event action query
-  switch -- $action {
-    start    { }
-    response { 
-      puts "Service Response: [$query result]"
-      # Hello, Cluster!
-    }
-    done     { }
-    timeout  { }
-    error    {
-      puts "Service Error: [$query error]"
-    }
-  }
+$cluster hook service discovered {
+  puts "New Service Discovered: $service"
 }
 
-$cluster hook service discovered {
-  # Query the discovered service
-  $cluster query -resolve $service -query {set ::myVar} -command response
-}
 # Enter the event loop and allow cluster to work
 vwait _forever_
 

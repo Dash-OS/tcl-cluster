@@ -101,6 +101,15 @@ Queries allow us to send a command to the cluster and collect the results.  They
 provide a special object that lives for a short period to coordinate the responses 
 automatically for you.
 
+#### `cluster query`
+
+ - **-id**
+ - **-collect** 
+ - **-resolve**
+ - **-command**
+ - **-query**
+ - **-timeout**
+ 
 ```tcl
 
 package require cluster

@@ -207,9 +207,13 @@ Send a heartbeat to the cluster, informing them of your presence on the cluster.
 handled automatically but can be sent manually if desired.  We have a few optional arguments 
 that may be included:
 
- - **props**   (list)
- - **tags**    (bool)
- - **channel** (integer)
+##### **?props?** (list)
+
+##### **?tags?** (bool)
+
+##### **?channel?** (integer)
+
+---
 
 #### `$cluster discover`
 
@@ -217,13 +221,19 @@ Send a discovery probe to the cluster.  This requests that all members of the cl
 report to you.  Services may report back at randomly delayed intervals. For the most part 
 this should never really be required as it is handled internally.
 
+---
+
 #### `$cluster broadcast`
 
 This command allows you to broadcast a command to all members of the cluster.  It 
 expects a single argument (*payload*) which should be a properly formatted payload 
 dict.
 
+---
+
 #### `$cluster send`
+
+---
 
 #### `$cluster query`
 
@@ -239,12 +249,18 @@ dict.
 This allows us to "search" for matching services which meet a specific criteria.  This 
 is used to aid in sending queries and events to the cluster.
 
+---
+
 #### `$cluster resolver`
 
 A more advanced version of `resolve` which allows us to add additional logic to the 
 resolution process.
 
+---
+
 #### `$cluster resolve_self`
+
+---
 
 #### `$cluster tags`
 
@@ -256,27 +272,35 @@ When tags are modified, they will be included on the next heartbeat which is sen
 cluster.  Other than that, they are not included unless requested through discovery or 
 direct queries.
 
-##### Arguments
+##### **?action?**
 
 **action**
  - **append**
  - **remove**
  - **replace**
 
-**args**
+##### **?...tags?**
+
+---
 
 #### `$cluster services`
 
 Returns a list of references to each service that we currently know about.
 
+---
+
 #### `$cluster known_services`
 
 Returns the number of services we currently know about.
+
+---
 
 #### `$cluster config`
 
 Returns the current configuration object that our cluster and services utilize 
 to coordinate their lifecycles.
+
+---
 
 #### `$cluster ttl`
 
@@ -289,37 +313,69 @@ a heartbeat or communication from it).
 > failed to communicate with a service.  All services will then expect a heartbeat or they will remove 
 > that service on their next evaluation.
 
+---
+
 #### `$cluster uuid`
 
+---
+
 #### `$cluster hook`
+
+---
 
 ## `$service` Commands Reference
 
 #### `$service resolve`
 
+---
+
 #### `$service resolver`
+
+---
 
 #### `$service query`
 
+---
+
 #### `$service send`
+
+---
 
 #### `$service info`
 
+---
+
 #### `$service ip`
+
+---
 
 #### `$service props`
 
+---
+
 #### `$service tags`
+
+---
 
 #### `$service local`
 
+---
+
 #### `$service hid`
+
+---
 
 #### `$service sid`
 
+---
+
 #### `$service last_seen`
 
+---
+
 #### `$service proto_props`
+
+---
 
 ## Hooks
 
@@ -329,7 +385,6 @@ evaluated within the hooks given context.
 
 We can modify the behavior at each level by either changing values before they are sent 
 or received, or throwing an error to cancel any further handling.
-
 
 ### Transmission Hooks
 

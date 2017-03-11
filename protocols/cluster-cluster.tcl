@@ -30,6 +30,56 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 ::oo::define ::cluster::protocol::c method proto {} { return c }
 ::oo::define ::cluster::protocol::c method props {} {}
 
+# When we want to send data to this protocol we will call this with the
+# service that we are wanting to send the payload to. We should return 
+# 1 or 0 to indicate success of failure.
+::oo::define ::cluster::protocol::c method send { packet {service {}} } {
+  try {
+    if { [string bytelength $packet] > 0 } {
+      puts $SOCKET $packet
+      chan flush $SOCKET
+    }
+  } on error {result options} {
+    catch { my CreateServer }
+    try {
+      puts $SOCKET $packet
+    } on error {result options} {
+      ::onError $result $options "While Sending to the Cluster"
+      return 0
+    }
+  }
+  return 1
+}
+
+# Called by our service when we have finished parsing the received data. It includes
+# information as-to how the completed data should be parsed.
+# Cluster ignores any close requests due to no keep alive.
+::oo::define ::cluster::protocol::c method done { service chanID keepalive {response {}} } {}
+
+# A service descriptor is used to define a protocols properties and to aid in 
+# securing the protocol and understanding how we need to negotiate with it.  
+# Every descriptor is expected to provide an "address" key.  Other than that it 
+# may define "port", "local" (is it a local-only protocol), etc.  They are available
+# to hooks at various points.
+::oo::define ::cluster::protocol::c method descriptor { chanID } {
+  return [ dict create \
+    address [lindex [chan configure $chanID -peer] 0]  \
+    port    $PORT
+  ]
+}
+
+# On each heartbeat, each of our protocol handlers receives a heartbeat call.
+# This allows the service to run any commands that it needs to insure that it
+# is still operating as expected.
+::oo::define ::cluster::protocol::c method heartbeat {} {
+
+}
+
+
+## Below are methods that are either specific to the protocol or that are 
+## not required by the cluster.
+
+
 # Join our UDP Cluster.  This is simply a multi-cast socket with "reuse" so that
 # multiple clients on the same machine can communicate with us using the given
 # cluster port.
@@ -60,44 +110,4 @@ if { [info commands ::cluster::protocol::c] eq {} } {
   }
   set packet [read $SOCKET]
   $CLUSTER receive [self] $SOCKET $packet
-}
-
-# When we want to send data to this protocol we will call this with the
-# service that we are wanting to send the payload to. We should return 
-# 1 or 0 to indicate success of failure.
-::oo::define ::cluster::protocol::c method send { packet {service {}} } {
-  try {
-    if { [string bytelength $packet] > 0 } {
-      puts $SOCKET $packet
-      chan flush $SOCKET
-    }
-  } on error {result options} {
-    catch { my CreateServer }
-    try {
-      puts $SOCKET $packet
-    } on error {result options} {
-      ::onError $result $options "While Sending to the Cluster"
-      return 0
-    }
-  }
-  return 1
-}
-
-# Called by our service when we have finished parsing the received data. It includes
-# information as-to how the completed data should be parsed.
-# Cluster ignores any close requests due to no keep alive.
-::oo::define ::cluster::protocol::c method done { service chanID keepalive {response {}} } {}
-
-::oo::define ::cluster::protocol::c method descriptor { chanID } {
-  return [ dict create \
-    address [lindex [chan configure $chanID -peer] 0]  \
-    port    $PORT
-  ]
-}
-
-# On each heartbeat, each of our protocol handlers receives a heartbeat call.
-# This allows the service to run any commands that it needs to insure that it
-# is still operating as expected.
-::oo::define ::cluster::protocol::c method heartbeat {} {
-
 }

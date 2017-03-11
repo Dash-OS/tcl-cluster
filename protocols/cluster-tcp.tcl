@@ -33,6 +33,64 @@ if { [info commands ::cluster::protocol::t] eq {} } {
   ]
 }
 
+# Called by our service when we have finished parsing the received data. It includes
+# information as-to how the completed data should be parsed.
+# Cluster ignores any close requests due to no keep alive.
+::oo::define ::cluster::protocol::t method done { service chanID keepalive {response {}} } {
+  if { [string is false $keepalive] } { my CloseSocket $chanID $service }
+}
+
+# A service descriptor is used to define a protocols properties and to aid in 
+# securing the protocol and understanding how we need to negotiate with it.  
+# Every descriptor is expected to provide an "address" key.  Other than that it 
+# may define "port", "local" (is it a local-only protocol), etc.  They are available
+# to hooks at various points.
+::oo::define ::cluster::protocol::t method descriptor { chanID } {
+  lassign [chan configure $chanID -peername] address hostname port
+  return [ dict create \
+    address  $address  \
+    hostname $hostname \
+    port     $port
+  ]
+}
+
+# On each heartbeat, each of our protocol handlers receives a heartbeat call.
+# This allows the service to run any commands that it needs to insure that it
+# is still operating as expected.
+::oo::define ::cluster::protocol::t method heartbeat {} {
+  
+}
+
+# When we want to send data to this protocol we will call this with the
+# service that we are wanting to send the payload to. We should return 
+# 1 or 0 to indicate success of failure.
+::oo::define ::cluster::protocol::t method send { packet {service {}} } {
+  try {
+    # Get the props and data required from the service
+    if { $service eq {} } { throw error "No Service Provided to TCP Protocol" }
+    # First check if we have an open socket and see if we can use that. If
+    # we can, continue - otherwise open a new connection to the client.
+    set sock [$service socket t]
+    if { $sock ne {} } {
+      try {
+        puts -nonewline $sock $packet
+      } on error {result options} {
+        my CloseSocket $sock $service
+        set sock {}
+      }
+    }
+    if { $sock eq {} } {
+      set sock [my OpenSocket $service]
+      puts -nonewline $sock $packet
+    }
+    return 1
+  } on error {r} {}
+  return 0
+}
+
+## Below are methods that are either specific to the protocol or that are 
+## not required by the cluster.
+
 ::oo::define ::cluster::protocol::t method CreateServer {} {
   set SOCKET [socket -server [namespace code [list my Connect]] 0]
   set PORT   [lindex [chan configure $SOCKET -sockname] end]
@@ -68,54 +126,4 @@ if { [info commands ::cluster::protocol::t] eq {} } {
   set sock    [socket $address $port]
   my Connect $sock $address $port $service
   return $sock
-}
-
-# When we want to send data to this protocol we will call this with the
-# service that we are wanting to send the payload to. We should return 
-# 1 or 0 to indicate success of failure.
-::oo::define ::cluster::protocol::t method send { packet {service {}} } {
-  try {
-    # Get the props and data required from the service
-    if { $service eq {} } { throw error "No Service Provided to TCP Protocol" }
-    # First check if we have an open socket and see if we can use that. If
-    # we can, continue - otherwise open a new connection to the client.
-    set sock [$service socket t]
-    if { $sock ne {} } {
-      try {
-        puts -nonewline $sock $packet
-      } on error {result options} {
-        my CloseSocket $sock $service
-        set sock {}
-      }
-    }
-    if { $sock eq {} } {
-      set sock [my OpenSocket $service]
-      puts -nonewline $sock $packet
-    }
-    return 1
-  } on error {r} {}
-  return 0
-}
-
-# Called by our service when we have finished parsing the received data. It includes
-# information as-to how the completed data should be parsed.
-# Cluster ignores any close requests due to no keep alive.
-::oo::define ::cluster::protocol::t method done { service chanID keepalive {response {}} } {
-  if { [string is false $keepalive] } { my CloseSocket $chanID $service }
-}
-
-::oo::define ::cluster::protocol::t method descriptor { chanID } {
-  lassign [chan configure $chanID -peername] address hostname port
-  return [ dict create \
-    address  $address  \
-    hostname $hostname \
-    port     $port
-  ]
-}
-
-# On each heartbeat, each of our protocol handlers receives a heartbeat call.
-# This allows the service to run any commands that it needs to insure that it
-# is still operating as expected.
-::oo::define ::cluster::protocol::t method heartbeat {} {
-  
 }

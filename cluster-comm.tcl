@@ -10,7 +10,6 @@ namespace eval ::cluster {
   
   # Our default configuration which also enforces the allowed arguments
   variable default_config [dict create \
-    name        [pid] \
     address     230.230.230.230 \
     port        23000 \
     ttl         600 \

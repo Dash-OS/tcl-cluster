@@ -208,17 +208,17 @@ The top-level API is used to join a given cluster.
 All of the configuration options are optional.  It is valid to simply call cluster join 
 to utilize the default values. 
 
-| Argument      |  Type  |  Required  |  Default  |  Description   |
-| ------------- | ------ | ---------- | --------- | -------------- |
-| -address      | IP     |  No        | 230.230.230.230 | The Broadcast IP Address to use for the cluster    |
-| -port         | Port   |  No        | 23000 | The Broadcast Port to use for the cluster |
-| -ttl          | Seconds | No        | 600   | How many seconds should we wait before removing a service if we don't hear from it? |
-| -heartbeat    | Milliseconds | No   | 120000 | At what interval should we send heartbeats to the cluster? |
-| -channels     | List   | No         | 0 1 2 | A list of communication channels that we should join |
-| -remote       | Integer | No        | 0     | Should we listen outside of localhost?  If so, what broadcast ttl? |
-| -tags         | List    | No        |       | A list of tags that we want to broadcast to the cluster. |
-| -protocols    | List    | No        | t c   | What protocols do we want to support for this member?  |
-| -$proto_id    | Dict    | Yes*      |       | This is only required when providing custom protocols.  See below for more information. |
+| Argument      |  Type   |  Required  |  Default  |  Description   |
+| ------------- | ------  | ---------- | --------- | -------------- |
+| -address      | IP      |  No        | 230.230.230.230 | The Broadcast IP Address to use for the cluster    |
+| -port         | Port    |  No        | 23000           | The Broadcast Port to use for the cluster |
+| -ttl          | Seconds | No         | 600             | How many seconds should we wait before removing unresponsive services? |
+| -heartbeat    | MS      | No         | 120000          | At what interval should we send heartbeats to the cluster? |
+| -channels     | List    | No         | 0 1 2           | A list of communication channels that we should join |
+| -remote       | Integer | No         | 0               | Should we listen outside of localhost?  If so, what broadcast ttl? |
+| -tags         | List    | No         |                 | A list of tags that we want to broadcast to the cluster. |
+| -protocols    | List    | No         | t c             | What protocols do we want to support for this member?  |
+| -$proto_id    | Dict    | Yes*       |                 | This is only required when providing custom protocols. |
 
 
 ---

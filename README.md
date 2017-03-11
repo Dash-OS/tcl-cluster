@@ -201,7 +201,7 @@ vwait _forever_
 
 ## `$cluster` Commands Reference
 
-#### `$cluster heartbeat` *?props tags channel?*
+#### $cluster heartbeat *?props tags channel?*
 
 Send a heartbeat to the cluster, informing them of your presence on the cluster.  This is 
 handled automatically but can be sent manually if desired.  We have a few optional arguments 
@@ -209,7 +209,7 @@ that may be included.
 
 ---
 
-#### `$cluster discover`
+#### $cluster discover
 
 Send a discovery probe to the cluster.  This requests that all members of the cluster 
 report to you.  Services may report back at randomly delayed intervals. For the most part 
@@ -217,7 +217,7 @@ this should never really be required as it is handled internally.
 
 ---
 
-#### `$cluster broadcast`
+#### $cluster broadcast
 
 This command allows you to broadcast a command to all members of the cluster.  It 
 expects a single argument (*payload*) which should be a properly formatted payload 
@@ -225,11 +225,11 @@ dict.
 
 ---
 
-#### `$cluster send` *...args*
+#### $cluster send *...args*
 
 ---
 
-#### `$cluster query` *...args*
+#### $cluster query *...args*
 
  - **-id**
  - **-collect** 
@@ -238,25 +238,25 @@ dict.
  - **-query**
  - **-timeout**
 
-#### `$cluster resolve` 
+#### $cluster resolve 
 
 This allows us to "search" for matching services which meet a specific criteria.  This 
 is used to aid in sending queries and events to the cluster.
 
 ---
 
-#### `$cluster resolver`
+#### $cluster resolver
 
-A more advanced version of `resolve` which allows us to add additional logic to the 
+A more advanced version of resolve which allows us to add additional logic to the 
 resolution process.
 
 ---
 
-#### `$cluster resolve_self`
+#### $cluster resolve_self
 
 ---
 
-#### `$cluster tags` *?action ...tags?*
+#### $cluster tags *?action ...tags?*
 
 When sent without arguments, this will respond with the current tags that have been 
 sent to the members of the cluster.  Otherwise we can use this command to add, remove, 
@@ -268,26 +268,26 @@ direct queries.
 
 ---
 
-### `$cluster services`
+#### $cluster services
 
 Returns a list of references to each service that we currently know about.
 
 ---
 
-### `$cluster known_services`
+#### $cluster known_services
 
 Returns the number of services we currently know about.
 
 ---
 
-### `$cluster config`
+#### $cluster config
 
 Returns the current configuration object that our cluster and services utilize 
 to coordinate their lifecycles.
 
 ---
 
-### `$cluster ttl`
+#### $cluster ttl
 
 Returns the current time-to-live value that is used.  This determines how long we will 
 allow a discovered service to remain in memory before removing it (if we have not received 
@@ -300,65 +300,65 @@ a heartbeat or communication from it).
 
 ---
 
-### `$cluster uuid`
+#### $cluster uuid
 
 ---
 
-### `$cluster hook`
+#### $cluster hook
 
 ---
 
 ## `$service` Commands Reference
 
-### `$service resolve`
+#### $service resolve
 
 ---
 
-### `$service resolver`
+#### $service resolver
 
 ---
 
-### `$service query`
+#### $service query
 
 ---
 
-### `$service send`
+#### $service send
 
 ---
 
-### `$service info`
+#### $service info
 
 ---
 
-### `$service ip`
+#### $service ip
 
 ---
 
-### `$service props`
+#### $service props
 
 ---
 
-### `$service tags`
+#### $service tags
 
 ---
 
-### `$service local`
+#### $service local
 
 ---
 
-### `$service hid`
+#### $service hid
 
 ---
 
-### `$service sid`
+#### $service sid
 
 ---
 
-### `$service last_seen`
+#### $service last_seen
 
 ---
 
-### `$service proto_props`
+#### $service proto_props
 
 ---
 

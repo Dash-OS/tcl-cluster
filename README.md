@@ -79,6 +79,7 @@ further context about the service.
 ```tcl
 
 package require cluster
+
 set cluster [cluster join -tags [list service_one]]
 
 $cluster hook service discovered {
@@ -93,6 +94,7 @@ vwait _forever_
 ```tcl
 
 package require cluster
+
 set cluster [cluster join -tags [list service_two]]
 
 $cluster hook service discovered {
@@ -113,6 +115,7 @@ automatically for you.
 ```tcl
 
 package require cluster
+
 set cluster [cluster join -tags [list service_one]]
 
 set var "Hello,"
@@ -134,6 +137,7 @@ vwait _forever_
 ```tcl
 
 package require cluster
+
 set cluster [cluster join -tags [list service_two]]
 
 set var "World!"
@@ -155,6 +159,7 @@ vwait _forever_
 ```tcl
 
 package require cluster
+
 set cluster [cluster join -tags [list service_three]]
 
 # Our QueryResponse will be called with events that occur during
@@ -198,9 +203,25 @@ vwait _forever_
 
 #### `$cluster heartbeat`
 
+Send a heartbeat to the cluster, informing them of your presence on the cluster.  This is 
+handled automatically but can be sent manually if desired.  We have a few optional arguments 
+that may be included:
+
+ - **props**   (list)
+ - **tags**    (bool)
+ - **channel** (integer)
+
 #### `$cluster discover`
 
+Send a discovery probe to the cluster.  This requests that all members of the cluster 
+report to you.  Services may report back at randomly delayed intervals. For the most part 
+this should never really be required as it is handled internally.
+
 #### `$cluster broadcast`
+
+This command allows you to broadcast a command to all members of the cluster.  It 
+expects a single argument (*payload*) which should be a properly formatted payload 
+dict.
 
 #### `$cluster send`
 
@@ -215,21 +236,58 @@ vwait _forever_
 
 #### `$cluster resolve`
 
+This allows us to "search" for matching services which meet a specific criteria.  This 
+is used to aid in sending queries and events to the cluster.
+
 #### `$cluster resolver`
+
+A more advanced version of `resolve` which allows us to add additional logic to the 
+resolution process.
 
 #### `$cluster resolve_self`
 
 #### `$cluster tags`
 
-#### `$cluster flags`
+When sent without arguments, this will respond with the current tags that have been 
+sent to the members of the cluster.  Otherwise we can use this command to add, remove, 
+or replace the tags that we wish to associate ourselves with.  
+
+When tags are modified, they will be included on the next heartbeat which is sent to the 
+cluster.  Other than that, they are not included unless requested through discovery or 
+direct queries.
+
+##### Arguments
+
+**action**
+ - **append**
+ - **remove**
+ - **replace**
+
+**args**
 
 #### `$cluster services`
 
+Returns a list of references to each service that we currently know about.
+
 #### `$cluster known_services`
+
+Returns the number of services we currently know about.
 
 #### `$cluster config`
 
+Returns the current configuration object that our cluster and services utilize 
+to coordinate their lifecycles.
+
 #### `$cluster ttl`
+
+Returns the current time-to-live value that is used.  This determines how long we will 
+allow a discovered service to remain in memory before removing it (if we have not received 
+a heartbeat or communication from it).
+
+> There are times this value is reduced.  When we attempt to open a channel with a service and it 
+> fails for any reason, we will dispatch a "ping" request.  This will tell our cluster that we have 
+> failed to communicate with a service.  All services will then expect a heartbeat or they will remove 
+> that service on their next evaluation.
 
 #### `$cluster uuid`
 
@@ -273,23 +331,21 @@ We can modify the behavior at each level by either changing values before they a
 or received, or throwing an error to cancel any further handling.
 
 
-#### `$cluster hook evaluate send`
+### Transmission Hooks
 
 #### `$cluster hook evaluate receive`
+
+#### `$cluster hook evaluate send`
 
 ### Channel Hooks
 
 #### `$cluster hook channel receive <channels>`
 
-### Evaluate Hooks
+#### `$cluster hook channel send <channels>`
 
-#### `$cluster hook evaluate service`
+### Query Hooks 
 
-#### `$cluster hook evaluate receive`
-
-#### `$cluster hook evaluate send`
-
-> Called right after the 
+#### `$cluster hook query`
 
 ### Protocol Hooks
 
@@ -297,22 +353,12 @@ or received, or throwing an error to cancel any further handling.
 
 #### `$cluster hook protocol <proto> send`
 
-### Op Hooks
-
-#### `$cluster hook op <op> receive`
-
-#### `$cluster hook op <op> send`
-
 ### Service Hooks
 
-#### `$cluster hook service eval`
+#### `$cluster hook service evaluate`
 
 #### `$cluster hook service validate`
 
-#### `$cluster hook service found`
+#### `$cluster hook service discovered`
 
 #### `$cluster hook service lost`
-
-
-# cluster-comm
-# cluster-comm

@@ -94,3 +94,10 @@ if { [info commands ::cluster::protocol::c] eq {} } {
     port    $PORT
   ]
 }
+
+# On each heartbeat, each of our protocol handlers receives a heartbeat call.
+# This allows the service to run any commands that it needs to insure that it
+# is still operating as expected.
+::oo::define ::cluster::protocol::c method heartbeat {} {
+
+}

@@ -7,7 +7,8 @@
   variable CLUSTER UUID CHANNELS
   variable LAST_HEARTBEAT PROPS 
   variable PROTOCOLS FLAGS SERVICE_ID SYSTEM_ID
-  variable SOCKETS ADDRESS TAGS LOCAL
+  variable SOCKETS ADDRESS TAGS LOCAL RESOLVER
+  variable NEW
 }
 
 ::oo::define ::cluster::service constructor { cluster proto chanID payload descriptor } {
@@ -24,8 +25,9 @@
   set CHANNELS   [list 0]
   set PROTOCOLS  [dict get $payload protocols]
   set SOCKETS    [dict create]
-  
+  set TAGS       [list]
   set ADDRESS    [dict get $descriptor address]
+  set NEW        1
   if { [dict exists $descriptor local] } {
     set LOCAL [dict get $descriptor local] 
   } else { set LOCAL [$CLUSTER is_local $ADDRESS] }
@@ -36,7 +38,17 @@
 }
 
 ::oo::define ::cluster::service destructor {
-  catch { $CLUSTER service_lost [self] }
+  # Cleanup any sockets which have been opened for this service.  
+  try {
+    dict for { protocol chanID } $SOCKETS {
+      set proto [$CLUSTER protocol $protocol]
+      $proto done [self] $chanID 0
+    }
+    # Report the service being lost to the cluster
+    $CLUSTER service_lost [self]
+  } on error {result options} {
+    ::onError $result $options "While Removing a Cluster Service"
+  }
 }
 
 ::oo::define ::cluster::service method heartbeat { {data {}} } {
@@ -44,23 +56,53 @@
   if { $data ne {} } {
     set PROPS [dict merge $PROPS $data] 
   }
+  my variable SERVICE_EXPECTED
+  if { [info exists SERVICE_EXPECTED] } {
+    # If we are expecting a service and hear back from it, we will cancel 
+    # any pings that we may have scheduled for the service.
+    $CLUSTER cancel_service_ping [my sid]
+    unset SERVICE_EXPECTED
+  }
 }
 
-::oo::define ::cluster::service method resolve { what {filter {}} } {
-  if { $filter ne {} } { 
-    switch -glob -- $what {
-      *system*  - *hid  { if { $filter eq [my hid] } { return 1 } }
-      *service* - *sid  { if { $filter eq [my sid] } { return 1 } }
-      *ip - *address { if { $filter eq [my ip] } { return 1 } }
-      *tag - *tags   { if { $filter in $TAGS   } { return 1 } }
+# opt = has (default), not, some
+# modifier = equal, match, regex
+::oo::define ::cluster::service method resolver { tags {modifier equal} {opt has} } {
+  switch -- $opt {
+    all - has {
+      # Must match every tag
+      foreach tag $tags { if { ! [my resolve $tag $modifier] } { return 0 } }
     }
-  } else {
-    if { $what eq [my hid] || $what eq [my sid] } { return 1 }
-    if { $what in $TAGS } { return 1 }
-    if { $what eq [my ip] } { return 1 }
-    if { $what eq "localhost" && [my local] } { return 1 } 
+    not {
+      # Must not match any of the tags
+      foreach tag $tags { if { [my resolve $tag $modifier] } { return 0 } }
+    }
+    some {
+      # Must have at least one $what
+      foreach tag $tags { if { [my resolve $tag $modifier] } { return 1 } }
+    }
   }
   return 0
+}
+
+::oo::define ::cluster::service method resolve { tag {modifier equal} } { 
+  switch -- $modifier {
+    equal { return [expr { $tag in $RESOLVER }] }
+    match { 
+      foreach resolve $RESOLVER {
+        if { [string match $tag $resolve] } { return 1 }
+      }
+    }
+    regex {
+      # Not Finished
+    }
+  }
+  return 0
+}
+
+::oo::define ::cluster::service method SetResolve {} {
+  set RESOLVER [list {*}$TAGS [my hid] [my sid] [my ip]]
+  if { [my local] } { lappend RESOLVER "localhost" }
 }
 
 ::oo::define ::cluster::service method query { args } {
@@ -70,9 +112,10 @@
   if { [dict exists $args -timeout] } {
     
   }
-  puts "Test Query"
-  set payload [$CLUSTER query_payload $ruid $query]
-  my send $payload
+  # We send a query payload to the service while also including 
+  # a filter so we can be sure only the service we are expecting 
+  # will receive the query.
+  my send [$CLUSTER query_payload $ruid $query [my sid]]
 }
 
 ::oo::define ::cluster::service method send { payload {protocols {}} {allow_broadcast 1} } {
@@ -81,6 +124,7 @@
   set packet [::cluster::packet::encode $payload]
   set sent   {}
   set attempts [list]
+  #puts "Send to [self]"
   foreach protocol $protocols {
     if { $protocol in $attempts } { continue }
     # We attempt to send to each protocol defined.  If our send returns true, we
@@ -108,24 +152,39 @@
       continue
     }
     
-    if { [$proto send $packet [self]] } { return $protocol } else { lappend attempts $protocol }
+    if { ! $LOCAL } {
+      # Some protocols are local-only.  We need to check if this is the case and
+      # skip the protocol if this service is not local to the system.
+      set descriptor [$proto descriptor]
+      if { [dict exists $descriptor local] && [dict get $descriptor local] } {
+        continue
+      }
+    }
     
+    if { [$proto send $packet [self]] } { return $protocol } else { lappend attempts $protocol }
   }
+  # We were unable to send to a service that was requested.  It is possible the service no longer
+  # exists.  When this occurs we broadcast a public ping of the service to indicate to the other
+  # members that it may no longer exist.  This way we can cleanup services before the TTL period
+  # ends and reduce false resolutions during queries.
+  if { [ my expected ] } {
+    # We only schedule a ping in the case we havent heard from the service for awhile
+    # or we are not already expecting a service to respond with a ping due to a previous
+    # ping request from ourselves or another member.
+    $CLUSTER schedule_service_ping [my sid]
+  }
+  
   # If none of the attempted protocols were successful, we return an empty value
   # to the caller.
-  puts "Failed to Send to Service: [self] [string bytelength $packet]"
+  #puts "Failed to Send to Service: [self] [string bytelength $packet]"
   return
 }
 
 ::oo::define ::cluster::service method receive { proto chanID payload descriptor } {
   #puts "[self] receives from $proto - $chanID"
   set data {}
-  set PROTOCOLS [dict get $payload protocols]
-  set protocol  [$proto proto]
-  puts "Receiving via $protocol"
+  set protocol [$proto proto]
   dict with payload {}
-  
-  if { [info exists tags] } { set TAGS $tags }
   
   # Did our partner provide us with a request uid?  If so, any reply will include the
   # ruid so it can identify the request.
@@ -140,16 +199,15 @@
   switch -- $type {
     0 {
       # Disconnect
-      puts "SERVICE [self] DISCONNECTING"
+      ~ "SERVICE [self] DISCONNECTING"
+      [self] destroy
     }
     1 {
       # Beacon
-      puts "SERVICE HEARTBEAT"
       my heartbeat $data
     }
     2 {
       # Discovery
-      puts "DISCOVERY REQUESTED BY SERVICE"
       # When we receive a discovery request from the service, we also treat it
       # as-if it were a heartbeat.  The payload of heartbeats and discovery 
       # conform to the same payloads (their properties).  Which we expect
@@ -162,11 +220,18 @@
       my send [$CLUSTER heartbeat_payload [list protoprops] 1 0 $response]
     }
     3 {
-      # Request
+      # Ping Requested by Service
+      # When we receive this from the service it means that at least one member
+      # of the cluster and this service are having an issue communicating.  It's
+      # payload indicates the services which it is requesting a response from.  
+      #
+      # All cluster members should reduce the TTL of the given services when they
+      # receive this so that the service will be terminated within the next 
+      # ___ seconds.
+      if { $data ne {} } { $CLUSTER expect_services $data }
     }
     4 {
       # Query
-      puts "QUERY REQUESTED WITH RUID: $response"
       set context [dict merge $payload [dict create \
         protocol $protocol
       ]]
@@ -195,10 +260,19 @@
       set PROPS $data
     }
   }
+  if { [info exists NEW] } {
+    unset NEW
+    # After 1 second, call our service_discovered hook.  We provide a slight
+    # delay because some services will send details about themselves after their
+    # initial heartbeat.
+    after 1000 [namespace code [list my hook $payload service discovered]]
+  }
   $proto done [self] $chanID $keepalive
 }
 
 ::oo::define ::cluster::service method hook { context args } {
+  set service [self]
+  set cluster $CLUSTER
   dict with context {}
   return [$CLUSTER run_hook {*}$args]
 }
@@ -213,16 +287,21 @@
   if { ! [info exists protocols] || "c" ni $protocols  } { return 0 }
   if { ! [info exists sid] || ! [info exists hid] } { return 0 }
   if { $sid ne $SERVICE_ID || $hid ne $SYSTEM_ID  } { return 0 }
-
+  
+  set PROTOCOLS $protocols
   if { [dict get $descriptor address] ne $ADDRESS } {
     set ADDRESS [dict get $descriptor address]
     if { [dict exists $descriptor local] } {
       set LOCAL [dict get $descriptor local] 
-    } else {
-      set LOCAL [$CLUSTER is_local $ADDRESS]
+    } else { set LOCAL [$CLUSTER is_local $ADDRESS] }
+  }
+  if { [info exists tags] } { 
+    if { $tags ne $TAGS } { 
+      set TAGS $tags
+      # Update the $RESOLVER variable
+      my SetResolve
     }
   }
-  
   set prevChan [my socket [$proto proto]]
   if { $prevChan ne $chanID } {
     my ChannelEvent open $proto $chanID
@@ -268,7 +347,7 @@
       }
     }
     op* - open {
-      if { [dict exists $SOCKETS $protocol] && [dict get $SOCKETS $protcol] ne $chanID } {
+      if { [dict exists $SOCKETS $protocol] && [dict get $SOCKETS $protocol] ne $chanID } {
         # A new channel is opening but we still have a reference to an older one?
         # We only allow one socket to each service per protocol - we call done on the previous
         $proto done [self] [dict get $SOCKETS $protocol] 0
@@ -278,15 +357,31 @@
   }
 }
 
-::oo::define ::cluster::service method socket { proto } { 
-  if { [dict exists $SOCKETS $proto] } {
-    return [dict get $SOCKETS $proto] 
+# When we determine a service may no longer exist on the cluster, but did not 
+# exit gracefully, this will be called on the service.  This means that the 
+# service has been requested to report itself to the cluster or else it will 
+# be removed from the cluster.
+::oo::define ::cluster::service method expected { {within 30} } {
+  my variable SERVICE_EXPECTED
+  if { [my last_seen] < 3 || [info exists SERVICE_EXPECTED] } {
+    # If the service was last seen within the last 3 seconds, we will ignore this.
+    return 0
+  }
+  set SERVICE_EXPECTED 1
+  set NEW_HEARTBEAT [expr { [clock seconds] - [$CLUSTER ttl] + $within }]
+  if { $NEW_HEARTBEAT < $LAST_HEARTBEAT } { set LAST_HEARTBEAT $NEW_HEARTBEAT }
+  return 1
+}
+
+::oo::define ::cluster::service method socket { protocol } { 
+  if { [dict exists $SOCKETS $protocol] } {
+    return [dict get $SOCKETS $protocol] 
   }
 }
 
 ::oo::define ::cluster::service method info {} {
   return [dict create \
-    last_seen  $LAST_HEARTBEAT \
+    last_seen  [my last_seen] \
     address    $ADDRESS \
     props      $PROPS \
     system_id  $SYSTEM_ID \
@@ -302,6 +397,11 @@
 ::oo::define ::cluster::service method local  {} { return $LOCAL   }
 ::oo::define ::cluster::service method hid    {} { return $SYSTEM_ID  }
 ::oo::define ::cluster::service method sid    {} { return $SERVICE_ID }
+# How many seconds has it been since the last heartbeat was received from the service?
+::oo::define ::cluster::service method last_seen {} {
+  return [expr { [clock seconds] - $LAST_HEARTBEAT }]
+}
+
 ::oo::define ::cluster::service method proto_props { protocol } {
   if { [dict exists $PROPS $protocol] } { return [dict get $PROPS $protocol] }
 }

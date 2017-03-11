@@ -50,7 +50,7 @@ if { [info commands ::cluster::protocol::t] eq {} } {
       $CLUSTER receive [self] $chanID [read $chanID]
     }
   } on error {result options} {
-    puts "TCP RECEIVE ERROR: $result"
+    ::onError $result $options "Cluster - TCP Receive Error" $chanID
   }
 }
 
@@ -93,10 +93,7 @@ if { [info commands ::cluster::protocol::t] eq {} } {
       puts -nonewline $sock $packet
     }
     return 1
-  } on error {result options} {
-    puts "Failed to Send to TCP Protocol: $result"
-    puts $options
-  }
+  } on error {r} {}
   return 0
 }
 
@@ -114,4 +111,11 @@ if { [info commands ::cluster::protocol::t] eq {} } {
     hostname $hostname \
     port     $port
   ]
+}
+
+# On each heartbeat, each of our protocol handlers receives a heartbeat call.
+# This allows the service to run any commands that it needs to insure that it
+# is still operating as expected.
+::oo::define ::cluster::protocol::t method heartbeat {} {
+  
 }

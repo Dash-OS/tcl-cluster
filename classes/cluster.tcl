@@ -24,11 +24,19 @@
   my BuildProtocols
   my heartbeat
   my discover
+  
 }
 
 # We need to destroy our various objects in the appropriate order so they have
 # access to the pieces they may need to clean themselves up.
 ::oo::define ::cluster::cluster destructor {
+  my variable SERVICES_TO_PING
+  if { [info exists SERVICES_TO_PING] } {
+    # Cancel our ping request
+    if { [dict exists $SERVICES_TO_PING after_id] } {
+      after cancel [dict get $SERVICES_TO_PING after_id] 
+    }
+  }
   after cancel $AFTER_ID
   if { [namespace exists ${NS}::services] } {
     # Delete the namespace holding all of our services attached to this cluster.
@@ -76,7 +84,7 @@
 }
 
 # We send a heartbeat to the cluster at the given interval.  Any listening services
-# will reset their timers for our service as they know we still exist.s
+# will reset their timers for our service as they know we still exist.
 ::oo::define ::cluster::cluster method heartbeat { {props {}} {tags 0} {channel 0} } {
   try {
     if { $channel == 0 } {
@@ -88,12 +96,12 @@
       set props [lsort -unique [concat $UPDATED_PROPS $props]]
       set UPDATED_PROPS [list]
       my CheckServices
+      my CheckProtocols
     }
     if { "tags" in $props } { set tags 1 }
-    set payload [my heartbeat_payload $props $tags $channel]
-    my broadcast $payload
+    my broadcast [my heartbeat_payload $props $tags $channel]
   } on error {result options} {
-    puts "Heartbeat Error: $result"
+    ::onError $result $options "While sending a cluster heartbeat"
   }
 }
 
@@ -103,18 +111,105 @@
     try {
       set info [$service info]
       if { [dict exists $info last_seen] } { 
-        set lastSeen [expr { [clock seconds] - [dict get $info last_seen] } ]
-        if { $lastSeen > [dict get $CONFIG ttl] } { catch { $service destroy } }
+        set lastSeen [dict get $info last_seen]
+        if { $lastSeen > [dict get $CONFIG ttl] } { $service destroy }
       } else { $service destroy }
     } on error {result options} {
-      puts "Service Check Error: $result"
+      ~ "Service Check Error: $result"
       catch { $service destroy }
     }
   }
 }
 
+::oo::define ::cluster::cluster method CheckProtocols {} {
+  dict for { protocol proto } $PROTOCOLS { catch { $proto heartbeat } }
+}
+
+# When a service believes another service is no longer responding, it will report
+# it to the cluster.  We will await any other reports from other services and combine
+# them into our request.  This way if we end up losing a group of services within a 
+# short period we do not spam the cluster with tons of pings.
+::oo::define ::cluster::cluster method schedule_service_ping { service_id } {
+  my variable SERVICES_TO_PING
+  if { [info exists SERVICES_TO_PING] } {
+    # We are already expecting to ping, add our service to the group if it does
+    # not already exist.
+    if { $service_id ni [dict get $SERVICES_TO_PING services] } { 
+      dict lappend SERVICES_TO_PING services $service_id
+    }
+  } else { 
+    dict set SERVICES_TO_PING services $service_id
+    dict set SERVICES_TO_PING after_id [after 10000 [namespace code [list my send_service_ping]]]
+  }
+}
+
+::oo::define ::cluster::cluster method send_service_ping {} {
+  my variable SERVICES_TO_PING
+  if { ! [info exists SERVICES_TO_PING] } { return }
+  set services [dict get $SERVICES_TO_PING services]
+  if { $services ne {} } {
+    # Broadcast our ping request to the cluster
+    my broadcast [my ping_payload $services]
+  }
+  unset SERVICES_TO_PING
+}
+
+::oo::define ::cluster::cluster method cancel_service_ping { service_id } {
+  my variable SERVICES_TO_PING
+  if { ! [info exists SERVICES_TO_PING] } { return }
+  set services [dict get $SERVICES_TO_PING services]
+  set services [lsearch -all -inline -not -exact $services $service_id]
+  if { $services eq {} } {
+    # We heard back from all services, cancel the ping request
+    after cancel [dict get $SERVICES_TO_PING after_id]
+    unset SERVICES_TO_PING
+  }
+}
+
+# When a ping is sent to the cluster by a service it indicates that another
+# service has likely had problems communicating with it and thinks we may
+# need to remove a member from the cluster.  
+#
+# We need to check if we are included in the list of services (and send a ping if so)
+# and also setup an event which will reduce the services TTL across the cluster.  If 
+# the service is still alive, it should send its heartbeat to the cluster within the 
+# next 15 seconds.  In addition, if more than one service is listed in the request,
+# the service should send at a random time between immediate and 15 seconds so that
+# we do not flood the cluster with responses.
+::oo::define ::cluster::cluster method expect_services { services } {
+  if { $SERVICE_ID in $services } {
+    # Uh-Oh!  We are being pinged!  Should we respond immediately or stagger?
+    if { [llength $services] < 2 } {
+      # Include our protoprops with the heartbeat in case the member
+      # has old or invalid values. Also send our tags
+      my heartbeat [list protoprops] 1
+    } else {
+      # Since more than 2 services are being pinged, we will stagger our response
+      # a bit.
+      set timeout [::cluster::rand 0 15000]
+      after cancel $AFTER_ID
+      set AFTER_ID [ after $timeout [namespace code [list my heartbeat [list protoprops] 1]] ]
+    }
+    # Remove ourself from the list of services.  If any remain, treat them like normal.
+    set services [lsearch -all -inline -not -exact $services $SERVICE_ID]
+  }
+  if { $services ne {} } {
+    set known_services [my services]
+    foreach service_id $services {
+      set service [lsearch -inline -glob $known_services *${service_id}*]
+      if { $service ne {} } {
+        # We found the service being pinged, we will reduce its TTL so that it must report
+        # to the cluster within the next 30 seconds or it will be removed from this member.
+        $service expected 30
+      }
+    }
+  }
+}
+
 ::oo::define ::cluster::cluster method is_local { address } {
-  if { $address in [::cluster::local_addresses] } { return 1 } else { return 0 }
+  if { $address in [::cluster::local_addresses] || [string equal $address localhost] } { 
+    return 1 
+  } else { return 0 }
 }
 
 # Called by any of our supported protocols to parse / handle a received payload
@@ -179,11 +274,10 @@
 # When we have not yet created a channel.  For example, it can be useful to request
 # a group of clients to join a specific channel.
 ::oo::define ::cluster::cluster method check_filter { filter } {
-  puts "Checking Filter: $filter"
+  #puts "Checking Filter: $filter"
   if { $SERVICE_ID in $filter } { return 1 }
   if { $SYSTEM_ID in $filter } { return 1 }
   foreach tag $TAGS { if { $tag in $filter } { return 1 } }
-  puts "Filter Does Not Match, Ignore Request"
   return 0
 }
 
@@ -198,9 +292,7 @@
 
 ::oo::define ::cluster::cluster method event {ns event proto args} {
   switch -nocase -glob -- $ns {
-    cha* - channel {
-      my ChannelEvent $event $proto {*}$args
-    }
+    cha* - channel { my ChannelEvent $event $proto {*}$args }
   }
 }
 
@@ -221,8 +313,8 @@
       if { [dict exists $CHANNELS $chanID service] } {
         set service [dict get $CHANNELS $chanID service]
       } else { lassign $args service }
-      if { $service ne {} } { $service event channel close $proto $chanID }
-      catch { dict unset CHANNELS $chanID }
+      if { $service ne {} } { catch { $service event channel close $proto $chanID } }
+      dict unset CHANNELS $chanID
     }
     r* - receive {
       lassign $args service
@@ -240,14 +332,12 @@
 # empty string at which point the command should cease to parse the received
 # payload immediately.
 ::oo::define ::cluster::cluster method service { proto chanID payload descriptor } {
-  
   set system_id  [dict get $payload hid]
   set service_id [dict get $payload sid]
   
   # Added Security - if the system id does not match, we dont parse it when only
   # accepting local.
   if { [dict get $CONFIG remote] == 0 && $system_id ne $SYSTEM_ID } { return }
-  #lassign $payload type rchan op ruid system_id service_id protocols flags data
   
   set uuid ${service_id}@${system_id}
   
@@ -272,10 +362,9 @@
     # are allowed to communicate with.  Otherwise it will be destroyed.
     try {
       set service [::cluster::service create $service [self] $proto $chanID $payload $descriptor]
-      try [my run_hook service discovered] on error {r} { return }
       return $service
     } on error {r} {
-      puts "Service Creation Error: $r"
+      ~ "Service Creation Error: $r"
       # Do nothing on creation error
     }
   }
@@ -283,6 +372,7 @@
 }
 
 ::oo::define ::cluster::cluster method service_lost { service } {
+  set cluster [self]
   try [my run_hook service lost] on error {r} { return }
 }
 
@@ -346,13 +436,14 @@
   return [ list [my known_services] 0 0 0 ] 
 }
 
+
 ::oo::define ::cluster::cluster method type { type } {
   if { ! [string is entier -strict $type] } {
     switch -nocase -glob -- $type {
       discon* - close { set type 0 }
       bea* - heart*   { set type 1 }
       discov* - find  { set type 2 }
-      req* - com*     { set type 3 }
+      ping            { set type 3 }
       q*              { set type 4 }
       res* - answ*    { set type 5 }
       event           { set type 6 }
@@ -396,6 +487,10 @@
 }
 
 ::oo::define ::cluster::cluster method query { args } {
+  if { {-collect} in $args } {
+    set args [lsearch -all -inline -not -exact $args {-collect}]
+    dict set args -collect 1
+  }
   if { [dict exists $args -id] } {
     set qid [dict get $args -id] 
   } else { 
@@ -415,7 +510,7 @@
   } trap NO_SERVICES {result} {
     return
   } on error {result options} {
-    puts "QUERY CREATION ERROR: $result"
+    ~ "QUERY CREATION ERROR: $result"
     return
   }
   
@@ -441,7 +536,7 @@
       try {
         return [ [dict get $QUERIES $ruid] event response $service $payload ] 
       } on error {result} {
-        puts "QUERY REQUEST ERROR: $result"
+        #puts "QUERY REQUEST ERROR: $result"
         return 0
       }
     } else { return 0 }
@@ -470,7 +565,7 @@
           if { $resolved ni $failed } { lappend failed $resolved }
         }
       } on error {result} {
-        puts "Failed to Send to Service $service | $result  \n Payload: $payload"
+        ~ "Failed to Send to Service $service | $result  \n Payload: $payload"
       }
     }
   }
@@ -479,12 +574,7 @@
 
 # Resolve services by running a search against each $arg to return the 
 # filtered services which match every arg. Resolution is a simple "tag-based"
-# search which matches against a services given tags.  By default a service will
-# resolve with:
-#   $ip       - The IP of the Service
-#   $name     - The name of the Service
-#   $tags     - Any of the tags defined by the service
-#   localhost - If the service is local it will resolve with "localhost"
+# search which matches against a services given tags.
 # set services [$cluster resolve localhost my_service]
 ::oo::define ::cluster::cluster method resolve args {
   set services [my services]
@@ -497,6 +587,64 @@
     }]
   }
   return $services
+}
+
+# resolver is a more powerful option than resolve which allows adding of some added logic.
+# Each argument will define which services we want to match against.
+#
+# Additionally, we can specify boolean-type modifiers which will change the behavior.  These
+# are applied IN ORDER so for example if we run -match after -has then has will not use match
+# but any queries after will.
+#
+# Modifiers:
+#  -equal (default)
+#   Items will use equality to test for success
+#  -match 
+#   Items will use string match to test for success
+#  -regexp
+#   Items will use regexp to test for success on each item
+
+# -has [list]
+#   The service must match all items in the list
+# -not [list]
+#   The service must NOT match any of the items given
+# -exact [list]
+#   The service must have every item in the list and no others
+# -some [list]
+#   The service must match at least one item in the list
+#
+# Examples:
+#  $cluster resolver -match -has [list *wait] -equal -some [list one two three]
+::oo::define ::cluster::cluster method resolver args {
+  set modifier equal
+  set services [my services]
+  foreach filter [split $args -] {
+    if { $filter eq {} } { continue }
+    if { [llength $services] == 0 } { break }
+    lassign $filter opt tags
+    if { $tags eq {} } { set modifier $opt } else {
+      set services [lmap e $services {
+        if { [string is true -strict [$e resolver $tags $modifier $opt]] } {
+          set e
+        } else { continue }
+      }]
+    }
+  }
+  return $services
+}
+
+# Resolve ourselves
+::oo::define ::cluster::cluster method resolve_self args {
+  foreach filter $args {
+    if { $filter eq {} } { continue }
+    if { $filter in $TAGS } { continue }
+    if { [string equal $filter $SERVICE_ID] } { continue }
+    if { [string equal $filter $SYSTEM_ID]  } { continue}
+    # 127.0.0.1 or LAN IP's
+    if { [my is_local $filter] } { continue }
+    return 0
+  }
+  return 1
 }
 
 # Tags are sent to clients to give them an idea for what each service provides or
@@ -536,4 +684,3 @@
   }
   return $TAGS
 }
-

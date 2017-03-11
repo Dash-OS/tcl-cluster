@@ -1,8 +1,6 @@
 namespace eval ::cluster {}
 namespace eval ::cluster::shortid { variable i 0; variable n 1 }
 
-proc ::cluster::shortid::rand {min max} { expr { int( rand() * ( $max - $min + 1 ) + $min )} }
-
 proc ::cluster::shortid::shuffle { list {max {}}} {
  set l1 {}; set l2 {}; set l3 {}; set l4 {}
  foreach le $list[set list {}] {
@@ -34,7 +32,7 @@ proc ::cluster::shortid::generate { {max_length 8} } {
   set cmds   [string map { {=} {} } [binary encode base64 [join [shuffle [info commands] 20] {}]]]
 
   set cl [expr { [string length $cmds] - 5 }]
-  set c1 [rand $1 $cl]; set c2 [rand $3 $cl]
+  set c1 [::cluster::rand $1 $cl]; set c2 [::cluster::rand $3 $cl]
   
   set uuid [string range [shuffle_string [format {%s%s%s} \
     [ incr i ] \

@@ -9,6 +9,16 @@ switch -- $::tcl_platform(platform) {
   unix { package require tuapi }
 }
 
+# these should be replaced in the future, they are for testing
+proc ::onError {r o args} { 
+  puts stderr "ERROR $result $args"
+  puts stderr $o
+}
+proc ::~ msg { puts stderr $msg }
+
+# Random number between....
+proc ::cluster::rand {min max} { expr { int( rand() * ( $max - $min + 1 ) + $min )} }
+
 variable ::cluster::i 0
 variable ::cluster::addresses [list]
 variable ::cluster::default_config [dict create \
@@ -16,7 +26,7 @@ variable ::cluster::default_config [dict create \
   address     230.230.230.230 \
   port        23000 \
   ttl         600 \
-  heartbeat   120000 \
+  heartbeat   [::cluster::rand 110000 140000] \
   protocols   [list t c] \
   remote      0 \
   tags        [list]

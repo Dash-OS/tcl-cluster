@@ -2,11 +2,19 @@
 
 ::oo::define ::cluster::query {
   variable CLUSTER QUERY_ID COMMAND TIMEOUT_ID SERVICES
-  variable SERVICE PAYLOAD PAYLOADS QUERY CHANNEL
+  variable SERVICE PAYLOAD PAYLOADS QUERY CHANNEL RESULTS
 }
 
 ::oo::define ::cluster::query constructor {cluster args} {
   set CLUSTER  $cluster
+
+  if { [dict exists $args -collect] && [dict get $args -collect] } {
+    
+    # Collect the results of each event and return to the done event
+    # We do this if RESULTS exists
+    set RESULTS [dict create]
+  }
+  
   set QUERY_ID [dict get $args -id]
   
   if { ! [dict exists $args -resolve] } { 
@@ -80,9 +88,7 @@
       set SERVICES [lsearch -all -inline -not -exact $SERVICES $SERVICE]
       if { [dict exists $PAYLOAD error] } {
         my DispatchEvent error 
-      } else {
-        my DispatchEvent response  
-      }
+      } else { my DispatchEvent response }
       if { $SERVICES eq {} } { [self] destroy }
     }
   }
@@ -94,6 +100,13 @@
 ::oo::define ::cluster::query method payloads  {} { return $PAYLOADS }
 ::oo::define ::cluster::query method query     {} { return $QUERY    }
 ::oo::define ::cluster::query method channel   {} { return $CHANNEL  }
+
+::oo::define ::cluster::query method results   {} {
+  if { [info exists RESULTS] } { return $RESULTS } else {
+    throw error "You may only get \"results\" of a cluster query if the -collect argument is specified"
+  }
+}
+
 ::oo::define ::cluster::query method result {} {
   if { [dict exists $PAYLOAD data] } {
     return [dict get $PAYLOAD data]
@@ -110,6 +123,25 @@
   [self] destroy
 }
 
+# break - kill our query and stop parsing responses
 ::oo::define ::cluster::query method DispatchEvent { event } {
-  catch { {*}$COMMAND [list $event [self]] }
+  set code [catch { {*}$COMMAND [list $event [self]] } result]
+  switch -- $code {
+    0 - 3 - 4 { # OK - BREAK - CONTINUE
+      if { [info exists RESULTS] && [string equal $event response] && $result ne {} } {
+        # We are collecting the results that are returned and will have them available
+        # as a dict that can be requested throughout the lifecycle.
+        dict set RESULTS $SERVICE $result
+      }
+      if { $code == 3 } {
+        if { ! [string equal $event done] } { [self] destroy }
+      }
+    }
+    1 { # ERROR
+      ::onError $result {} "While Parsing Cluster Query Event $event" [self]
+    }
+    2 { # RETURN
+      
+    }
+  }
 }

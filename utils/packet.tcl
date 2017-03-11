@@ -5,6 +5,12 @@ namespace eval ::cluster::packet {
 
 set ::cluster::packet::encoder [::bpacket::writer new]
 
+# This builds our binary format template.  It is utilized by both the
+# encoding and decoding end to understand how to build and parse our 
+# binary formatting  automatically.
+#
+# asterix items are marked as required, although this is not currently
+# enforced.  
 $::cluster::packet::encoder template {
   * flags  type channel   | 1
   * string hid            | 2
@@ -97,7 +103,7 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
     }
     $reader destroy
   } on error {result options} {
-    puts "Malformed Packet! $result"
+    ~ "Malformed Packet! $result"
     catch { $reader destroy }
   }
   if { $active } { set result {} }

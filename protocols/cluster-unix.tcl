@@ -42,8 +42,8 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 }
 
 ::oo::define ::cluster::protocol::u method CreateServer { } {
-  puts "CREATE UNIX SERVER: $SERVER_PATH"
   if { [file exists $SERVER_PATH] } { file delete -force $SERVER_PATH }
+  if { [info exists SOCKET] } { catch { my CloseSocket $SOCKET } }
   set SOCKET [::unix_sockets::listen $SERVER_PATH [namespace code [list my Connect $SERVER_PATH {}]]]
 } 
 
@@ -62,7 +62,7 @@ if { [info commands ::cluster::protocol::u] eq {} } {
       $CLUSTER receive [self] $chanID [read $chanID]
     }
   } on error {result options} {
-    puts "TCP RECEIVE ERROR: $result"
+    ::onError $result $options "Cluster - Unix Socket Receive Error"
   }
 }
 
@@ -73,8 +73,8 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 
 ::oo::define ::cluster::protocol::u method OpenSocket { service } {
   set props [$service proto_props [my proto]]
-  if { $props eq {} } { throw error "Services UDP Protocol Props are Unknown" }
-  if { ! [dict exists $props path] } { throw error "Unknown UDP Path for $service" }
+  if { $props eq {} } { throw error "Services Unix Protocol Props are Unknown" }
+  if { ! [dict exists $props path] } { throw error "Unknown Unix Socket Path for $service" }
   set path [dict get $props path]
   set sock [::unix_sockets::connect $path]
   my Connect $path $service $sock
@@ -104,10 +104,7 @@ if { [info commands ::cluster::protocol::u] eq {} } {
       puts -nonewline $sock $packet
     }
     return 1
-  } on error {result options} {
-    puts "Failed to Send to TCP Protocol: $result"
-    puts $options
-  }
+  } on error {r} {}
   return 0
 }
 
@@ -123,4 +120,11 @@ if { [info commands ::cluster::protocol::u] eq {} } {
     local   1 \
     address $SERVER_PATH
   ]
+}
+
+# On each heartbeat, each of our protocol handlers receives a heartbeat call.
+# This allows the service to run any commands that it needs to insure that it
+# is still operating as expected.
+::oo::define ::cluster::protocol::u method heartbeat {} {
+  if { ! [file exists $SERVER_PATH] } { my CreateServer }
 }

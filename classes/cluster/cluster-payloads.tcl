@@ -86,3 +86,8 @@
     data $services 
   ]]
 }
+
+# Event Payload is sent when we simply want to send data to a member of the cluster. 
+::oo::define ::cluster::cluster method event_payload { request channel {tags 0} {flags 0} } {
+  return [ my payload 6 $channel $request $tags $flags ]
+}

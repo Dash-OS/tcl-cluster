@@ -54,12 +54,12 @@
   if { [my local] } { lappend RESOLVER "localhost" }
 }
 
-
+# Not for hooks that must be mutated.
 ::oo::define ::cluster::service method hook { context args } {
   set service [self]
   set cluster $CLUSTER
   dict with context {}
-  return [$CLUSTER run_hook {*}$args]
+  return [ $CLUSTER run_hook {*}$args ]
 }
 
 # When we determine a service may no longer exist on the cluster, but did not 

@@ -154,7 +154,7 @@ set ::bpacket::value_ids [dict create \
 
 # add raw bytes to our packet which is not converted to utf-8 first
 ::oo::define ::bpacket::writer method bytes { bytes } {
-  append response [my uint64 [string bytelength $bytes]] $bytes
+  append response [my uint64 [string length $bytes]] $bytes
 }
 
 ::oo::define ::bpacket::writer method flag { n1 n2 } {

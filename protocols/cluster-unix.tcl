@@ -57,6 +57,9 @@ if { [info commands ::cluster::protocol::u] eq {} } {
   try {
     # Get the props and data required from the service
     if { $service eq {} } { throw error "No Service Provided to UDP Protocol" }
+    # Since this is a local protocol, we will only attempt to send if the
+    # service is a local service
+    if { ! [$service local] } { return 0 }
     # First check if we have an open socket and see if we can use that. If
     # we can, continue - otherwise open a new connection to the client.
     set sock [$service socket [my proto]]

@@ -105,6 +105,36 @@ $cluster hook service discovered {
 vwait _forever_
 
 ```
+## Channels / Hooks / Encryption
+
+Channels provide an additional layer of extensibility to your cluster communications. 
+Members of the cluster will ignore any data they receive that are on channels they have 
+not subscribed to. 
+
+When combined with hooks this provides us with the capability to add some simple add-ons 
+to how our cluster will work. 
+
+For example, say we wanted to encrypt some of the data that was being transmitted, but only 
+on a specific channel.  This way only members which know the encryption key would attempt to 
+read it. 
+
+All we would need to do is add a hook for the channel we want which would encrypt before sending 
+and decrypt before reading.  The encrypted key of a payload tells us to save raw bytes rather than 
+utf-8 encoded strings.
+
+```tcl
+$cluster hook channel 5 send {
+  if { [dict exists $payload data] } {
+    dict set payload encrypted [encrypt [dict get $payload data]]
+    dict unset payload data
+  }
+}
+
+$cluster hook channel 5 receive {
+  dict set payload data [decrypt [dict get $payload encrypted]]
+  dict unset payload encrypted
+}
+```
 
 ## Queries
 

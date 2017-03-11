@@ -1,6 +1,14 @@
-::oo::define ::cluster::service method send { payload {protocols {}} {allow_broadcast 1} } {
+::oo::define ::cluster::service method send { payload {protocols {}} {allow_broadcast 1} {ping_on_fail 1} } {
   if { $protocols eq {} } { set protocols $PROTOCOLS }
   # Encode the packet that we want to send to the cluster.
+  if { ! [dict exists $payload filter] } {
+    # When sending to a service, if a filter was not provided we will
+    # add the service to the filter.  This is simply a security
+    # mechanism to insure we are only sending this message to the given
+    # service.
+    dict set payload filter [my sid]
+  }
+  
   set packet [::cluster::packet::encode $payload]
   set sent   {}
   set attempts [list]
@@ -17,7 +25,7 @@
       # Requested a protocol which this service does not say that it supports.
       # We will simply ignore it for now
       continue
-    } elseif { $protocol eq "c" && ! $allow_broadcast } {
+    } elseif { [string equal $protocol c] && ! $allow_broadcast } {
       # When we have specified that we should not broadcast we skip the cluster
       # protocol
       continue
@@ -35,6 +43,11 @@
     if { ! $LOCAL } {
       # Some protocols are local-only.  We need to check if this is the case and
       # skip the protocol if this service is not local to the system.
+      #
+      # In general a protocol will already implement a check like this, but we 
+      # want to run it so that we do not even attempt a transmission.  This way 
+      # if we try to send to a service that is not local we do not try to ping 
+      # it needlessly due to this failure.
       set descriptor [$proto descriptor]
       if { [dict exists $descriptor local] && [dict get $descriptor local] } {
         continue
@@ -48,7 +61,7 @@
   # exists.  When this occurs we broadcast a public ping of the service to indicate to the other
   # members that it may no longer exist.  This way we can cleanup services before the TTL period
   # ends and reduce false resolutions during queries.
-  if { [llength $attempts] > 0 && [ my expected ] } {
+  if { $ping_on_fail && [llength $attempts] > 0 && [ my expected ] } {
     # We only schedule a ping in the case we havent heard from the service for awhile
     # or we are not already expecting a service to respond with a ping due to a previous
     # ping request from ourselves or another member.

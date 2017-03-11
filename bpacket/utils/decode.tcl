@@ -141,6 +141,7 @@
     20 {  # AES Encrypted with pre-shared key
           # TODO: Possibly encrypt the data using a configured
           #       encryption key.  
+      puts Encrypted
       set data [my string]
     }
     default {

@@ -67,14 +67,15 @@
 # filtered services which match every arg. Resolution is a simple "tag-based"
 # search which matches against a services given tags.
 # set services [$cluster resolve localhost my_service]
-::oo::define ::cluster::cluster method resolve args {
+::oo::define ::cluster::cluster method resolve {filters args} {
   set services [my services]
-  foreach filter $args {
+  foreach filter [concat $filters $args] {
     if { $services eq {} } { break }
     set services [lmap e $services { 
-      if { [string match "::*" $filter] || [string is true -strict [ $e resolve $filter ]] } {
-        set e
-      } else { continue }
+      if { 
+        ( [string match "::*" $filter] && [info commands $filter] ne {} )
+        || [ string is true -strict [ $e resolve $filter ] ]
+      } { set e } else { continue }
     }]
   }
   return $services

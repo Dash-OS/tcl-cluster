@@ -80,6 +80,95 @@ vwait _forever_
 
 ```
 
+## Queries
+
+One of the key features of cluster is the ability to run queries against various
+parts of the cluster and collect the responses.  This allows us to coordinate 
+our services and manage them intelligently throughout the clusters lifecycle.
+
+```tcl
+
+package require cluster
+set cluster [cluster join -tags [list service_one]]
+
+set var "Hello,"
+
+$cluster hook query {
+  if { ! [my local] } { throw error "Only Local can Query" }
+  uplevel #0 [list try $data]
+}
+
+$cluster hook service discovered {
+  puts "New Service Discovered: $service"
+}
+
+# Enter the event loop and allow cluster to work
+vwait _forever_
+
+```
+
+```tcl
+
+package require cluster
+set cluster [cluster join -tags [list service_two]]
+
+set var "World!"
+
+$cluster hook query {
+  if { ! [my local] } { throw error "Only Local can Query" }
+  uplevel #0 [list try $data]
+}
+
+$cluster hook service discovered {
+  puts "New Service Discovered: $service"
+}
+
+# Enter the event loop and allow cluster to work
+vwait _forever_
+
+```
+
+```tcl
+
+package require cluster
+set cluster [cluster join -tags [list service_three]]
+
+# Our QueryResponse will be called with events that occur during
+# the queries lifecycle.
+proc QueryResponse { event } {
+  lassign $event action query
+  switch -- $action {
+    response {
+      # A Service has provided a response.  Return the result so 
+      # we can collect the results when completed.
+      return [$query result]
+    }
+    done {
+      # Our query is complete - all services have responded.
+      set results [$query results]
+      puts "Query Completed!  Results Are:"
+      # Hello, World!
+      puts [dict values $results]
+    }
+    timeout {
+      # Our query has timed out
+    }
+  }
+}
+
+proc RunQuery {} {
+  # Query all the services on the localhost, collect the results, run QueryEvent 
+  # for events, return the value of ::var
+  $::cluster query -resolve localhost -collect  -command QueryEvent -query { set ::var }   
+}
+
+# Give a few seconds for all the services to join, then run the query
+after 5000 RunQuery
+
+# Enter the event loop and allow cluster to work
+vwait _forever_
+
+```
 
 ## Hooks
 

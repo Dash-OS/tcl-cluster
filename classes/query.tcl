@@ -125,7 +125,7 @@
 
 # break - kill our query and stop parsing responses
 ::oo::define ::cluster::query method DispatchEvent { event } {
-  set code [catch { {*}$COMMAND [list $event [self]] } result]
+  set code [catch { uplevel #0 [list {*}$COMMAND [list $event [self]]] } result]
   switch -- $code {
     0 - 3 - 4 { # OK - BREAK - CONTINUE
       if { [info exists RESULTS] && [string equal $event response] && $result ne {} } {

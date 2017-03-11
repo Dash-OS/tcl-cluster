@@ -138,9 +138,10 @@
     19 { # Container - a container simply wraps values in a length-delimited 
          #             fashion.
     }
-    20 { # AES Encrypted with pre-shared key
-        # TODO: Possibly encrypt the data using a configured
-        #       encryption key.  
+    20 {  # AES Encrypted with pre-shared key
+          # TODO: Possibly encrypt the data using a configured
+          #       encryption key.  
+      set data [my string]
     }
     default {
       throw error "Malformed Packet"

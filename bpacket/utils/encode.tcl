@@ -154,7 +154,7 @@ set ::bpacket::value_ids [dict create \
 
 # add raw bytes to our packet which is not converted to utf-8 first
 ::oo::define ::bpacket::writer method bytes { bytes } {
-  append response [my uint64 [string length $bytes]] $bytes
+  append response [my uint64 [string bytelength $bytes]] $bytes
 }
 
 ::oo::define ::bpacket::writer method flag { n1 n2 } {
@@ -205,7 +205,7 @@ set ::bpacket::value_ids [dict create \
       20 { # AES Encrypted with pre-shared key
           # TODO: Possibly encrypt the data using a configured
           #       encryption key.  
-        set value [ my string [lindex $args 0] ]
+        set value [ my bytes [lindex $args 0] ]
       }
     }
     dict set FIELDS $field_num value $value

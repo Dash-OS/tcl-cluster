@@ -8,10 +8,9 @@ namespace eval ::cluster {
 switch -- $::tcl_platform(platform) {
   unix { package require tuapi }
 }
-
-# these should be replaced in the future, they are for testing
-proc ::onError {r o args} { 
-  puts stderr "ERROR $result $args"
+# temporary 
+proc ::onError {r o args} {
+  puts stderr "Error: $r $args"
   puts stderr $o
 }
 proc ::~ msg { puts stderr $msg }
@@ -28,6 +27,7 @@ variable ::cluster::default_config [dict create \
   ttl         600 \
   heartbeat   [::cluster::rand 110000 140000] \
   protocols   [list t c] \
+  channels    [list] \
   remote      0 \
   tags        [list]
 ]

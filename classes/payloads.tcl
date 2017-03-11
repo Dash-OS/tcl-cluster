@@ -1,4 +1,3 @@
-
 # 0 - Disconnecting (Gracefully)
 # 1 - Beacon / Heartbeat
 # 2 - Discovery Request
@@ -6,10 +5,38 @@
 # 4 - Query
 # 5 - Query Response
 # 6 - Event
+::oo::define ::cluster::cluster method get_type { type } {
+  if { ! [string is entier -strict $type] } {
+    switch -nocase -glob -- $type {
+      discon* - close { set type 0 }
+      bea* - heart*   { set type 1 }
+      discov* - find  { set type 2 }
+      ping            { set type 3 }
+      q*              { set type 4 }
+      res* - answ*    { set type 5 }
+      event           { set type 6 }
+      default { throw error "Unknown Type: $type" }
+    } 
+  }
+  return $type
+}
+
+::oo::define ::cluster::cluster method get_channel { channel } {
+  if { ! [string is entier -strict $channel] } {
+    switch -nocase -glob -- $channel {
+      broadcast - br* { set type 0 }
+      system    - sy* { set type 1 }
+      lan - lo* - la* { set type 2 }
+      default { throw error "Unknown Channel: $channel" }
+    }
+  }
+  return $channel
+}
+
 ::oo::define ::cluster::cluster method payload { type channel payload {tags 0} {flags 1} } {
   set payload [dict merge [dict create \
-    type      [my type $type] \
-    channel   [my channel $channel] \
+    type      [my get_type $type] \
+    channel   [my get_channel $channel] \
     hid       $SYSTEM_ID \
     sid       $SERVICE_ID \
     protocols [my protocols]

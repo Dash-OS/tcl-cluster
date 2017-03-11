@@ -1,6 +1,6 @@
 ::oo::define ::cluster::cluster {
   variable ID NS SYSTEM_ID SERVICE_ID CONFIG PROTOCOLS HOOKS TAGS AFTER_ID
-  variable UPDATED_PROPS CHANNELS QID QUERIES
+  variable UPDATED_PROPS CHANNELS QID QUERIES COMM_CHANNELS
 }
 
 ::oo::define ::cluster::cluster constructor { id config } {
@@ -16,6 +16,7 @@
   set NS       ::cluster::clusters::${ID}
   set AFTER_ID {}
   set CHANNELS [dict create]
+  set COMM_CHANNELS [lsort -unique -real [list 0 1 2 {*}[dict get $config channels]]]
   namespace eval $NS {}
   namespace eval ${NS}::services {}
   namespace eval ${NS}::queries  {}
@@ -24,7 +25,6 @@
   my BuildProtocols
   my heartbeat
   my discover
-  
 }
 
 # We need to destroy our various objects in the appropriate order so they have
@@ -242,7 +242,12 @@
       # Ignore empty payloads or payloads that we receive from ourselves.
       return
     }
-
+    # Are we currently listening to the channel that the communication was
+    # received on?
+    if { [dict get $payload channel] ni $COMM_CHANNELS } {
+      puts "Not In Received Channel"
+      return
+    }
     # Called before anything is done with the received payload but after it is
     # decoded. $payload may be modified if necessary before it is further evaluated.
     try [my run_hook evaluate receive] on error {r} { return }
@@ -437,34 +442,6 @@
 }
 
 
-::oo::define ::cluster::cluster method type { type } {
-  if { ! [string is entier -strict $type] } {
-    switch -nocase -glob -- $type {
-      discon* - close { set type 0 }
-      bea* - heart*   { set type 1 }
-      discov* - find  { set type 2 }
-      ping            { set type 3 }
-      q*              { set type 4 }
-      res* - answ*    { set type 5 }
-      event           { set type 6 }
-      default { throw error "Unknown Type: $type" }
-    } 
-  }
-  return $type
-}
-
-::oo::define ::cluster::cluster method channel { channel } {
-  if { ! [string is entier -strict $channel] } {
-    switch -nocase -glob -- $channel {
-      broadcast - br* { set type 0 }
-      system    - sy* { set type 1 }
-      lan - lo* - la* { set type 2 }
-      default { throw error "Unknown Channel: $channel" }
-    }
-  }
-  return $channel
-}
-
 # Send a discovery probe to the cluster.  Each service will send its response
 # based on the best protocol it can find. 
 ::oo::define ::cluster::cluster method discover { {ruid {}} {channel 0} } {
@@ -550,28 +527,49 @@
 # Send a payload to the given service(s).  Optionally provide a list of protocols
 # which we want to send to if possible.  This will be matched against each services
 # protocols to determine the best method of communication to utilize.
-::oo::define ::cluster::cluster method send { services payload {protocols {}} args } {
-  set sent   [list]
-  set failed [list]
-  foreach service $services {
-    set rservices [my resolve $service]
-    foreach resolved $rservices {
-      if { $resolved in $sent || $resolved in $failed } { continue }
-      try { 
-        set protocol [ $resolved send $payload $protocols ]
-        if { $protocol ne {} } {
-          lappend sent $resolved
-        } else {
-          if { $resolved ni $failed } { lappend failed $resolved }
-        }
-      } on error {result} {
-        ~ "Failed to Send to Service $service | $result  \n Payload: $payload"
-      }
-    }
+::oo::define ::cluster::cluster method query { args } {
+  if { {-collect} in $args } {
+    set args [lsearch -all -inline -not -exact $args {-collect}]
+    dict set args -collect 1
   }
-  return [list $sent $failed]
+  if { [dict exists $args -id] } {
+    set qid [dict get $args -id] 
+  } else { 
+    set qid [my QueryID] 
+    dict set args -id $qid
+  }
+  
+  set query ${NS}::queries::$qid
+  if { [info commands $query] ne {} } {
+    # When we have a query which matches a previously created query
+    # that has not yet timed out we will force it to finish first.
+    $query destroy
+  }
+  
+  try {
+    set query [::cluster::query create $query [self] {*}$args]
+  } trap NO_SERVICES {result} {
+    return
+  } on error {result options} {
+    ~ "QUERY CREATION ERROR: $result"
+    return
+  }
+  
+  dict set QUERIES $qid $query
+  
+  return $query
 }
 
+$cluster send \
+  -resolve   [list] \
+  -services  [list] \
+  -filter    [list] \
+  -protocols [list] \
+  -channel   0 \
+  -ruid      {} \
+  
+  
+  
 # Resolve services by running a search against each $arg to return the 
 # filtered services which match every arg. Resolution is a simple "tag-based"
 # search which matches against a services given tags.
@@ -683,4 +681,24 @@
     }
   }
   return $TAGS
+}
+
+::oo::define ::cluster::cluster method channel { action channels } {
+  switch -nocase -- $action {
+    subscribe - enter - join - add {
+      foreach channel $channels {
+        if { $channel ni $COMM_CHANNELS } {
+          lappend COMM_CHANNELS $channel
+        }
+      }
+    }
+    unsubscribe - exit - leave - remove {
+      foreach channel $channels {
+        if { $channel in [list 0 1 2] } { throw error "You may not leave the default channels 0-2" }
+        if { $channel in $COMM_CHANNELS } {
+          set COMM_CHANNELS [lsearch -all -inline -not -exact $COMM_CHANNELS $channel]
+        }
+      }
+    }
+  }
 }

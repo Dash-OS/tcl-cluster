@@ -31,7 +31,7 @@
   if { [dict exists $descriptor local] } {
     set LOCAL [dict get $descriptor local] 
   } else { set LOCAL [$CLUSTER is_local $ADDRESS] }
-  
+  my SetResolve
   # Confirm that we can validate this service using our standard validate method.  This is called
   # directly by the cluster before parsing any payload after we have been created initially.
   if { ! [my validate $proto $chanID $payload $descriptor] } { throw error "Failed to Validate Discovered Service" }
@@ -163,11 +163,12 @@
     
     if { [$proto send $packet [self]] } { return $protocol } else { lappend attempts $protocol }
   }
+  
   # We were unable to send to a service that was requested.  It is possible the service no longer
   # exists.  When this occurs we broadcast a public ping of the service to indicate to the other
   # members that it may no longer exist.  This way we can cleanup services before the TTL period
   # ends and reduce false resolutions during queries.
-  if { [ my expected ] } {
+  if { [llength $attempts] > 0 && [ my expected ] } {
     # We only schedule a ping in the case we havent heard from the service for awhile
     # or we are not already expecting a service to respond with a ping due to a previous
     # ping request from ourselves or another member.
@@ -185,7 +186,7 @@
   set data {}
   set protocol [$proto proto]
   dict with payload {}
-  
+  puts "Receiving on Channel: $channel"
   # Did our partner provide us with a request uid?  If so, any reply will include the
   # ruid so it can identify the request.
   if { [info exists ruid] } { dict set response ruid $ruid } else { set response {} }
@@ -298,14 +299,11 @@
   if { [info exists tags] } { 
     if { $tags ne $TAGS } { 
       set TAGS $tags
-      # Update the $RESOLVER variable
       my SetResolve
     }
   }
   set prevChan [my socket [$proto proto]]
-  if { $prevChan ne $chanID } {
-    my ChannelEvent open $proto $chanID
-  }
+  if { $prevChan ne $chanID } { my ChannelEvent open $proto $chanID }
   
   switch -- $channel {
     0 {
@@ -397,6 +395,7 @@
 ::oo::define ::cluster::service method local  {} { return $LOCAL   }
 ::oo::define ::cluster::service method hid    {} { return $SYSTEM_ID  }
 ::oo::define ::cluster::service method sid    {} { return $SERVICE_ID }
+
 # How many seconds has it been since the last heartbeat was received from the service?
 ::oo::define ::cluster::service method last_seen {} {
   return [expr { [clock seconds] - $LAST_HEARTBEAT }]

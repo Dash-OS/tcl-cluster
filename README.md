@@ -97,9 +97,9 @@ vwait _forever_
 
 ## Queries
 
-One of the key features of cluster is the ability to run queries against various
-parts of the cluster and collect the responses.  This allows us to coordinate 
-our services and manage them intelligently throughout the clusters lifecycle.
+Queries allow us to send a command to the cluster and collect the results.  They 
+provide a special object that lives for a short period to coordinate the responses 
+automatically for you.
 
 ```tcl
 
@@ -174,7 +174,7 @@ proc QueryResponse { event } {
 proc RunQuery {} {
   # Query all the services on the localhost, collect the results, run QueryEvent 
   # for events, return the value of ::var
-  $::cluster query -resolve localhost -collect  -command QueryEvent -query { set ::var }   
+  $::cluster query -collect -resolve localhost -command QueryEvent -query { set ::var }   
 }
 
 # Give a few seconds for all the services to join, then run the query

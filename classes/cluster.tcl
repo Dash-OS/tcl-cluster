@@ -568,8 +568,6 @@ $cluster send \
   -channel   0 \
   -ruid      {} \
   
-  
-  
 # Resolve services by running a search against each $arg to return the 
 # filtered services which match every arg. Resolution is a simple "tag-based"
 # search which matches against a services given tags.

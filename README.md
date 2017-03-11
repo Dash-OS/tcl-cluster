@@ -59,13 +59,15 @@ It is extremely easy to provide new protocols that cluster can utilize.  Simply 
 general template provided by the included protocols.  Out of the box we support [UDP](https://sourceforge.net/projects/tcludp/), 
 [TCP](https://www.tcl.tk/man/tcl8.6/TclCmd/socket.htm), and [Unix Sockets](https://sourceforge.net/projects/tcl-unixsockets/).  
 
-## Quick Example
+## Simple Service Discovery
 
 Below we see a simple example of using `cluster` where we simply join the cluster
 and register a hook to inform us whenever a new service has been discovered.
 
 Running this on two different shells (on the same system for now), you should
-see the two shells discovered each other.
+see the two shells discovered each other.  In each example, the `$service` variable 
+is a reference to the service object which can be used to communicate with or get 
+further context about the service.
 
 ```tcl
 
@@ -100,15 +102,6 @@ vwait _forever_
 Queries allow us to send a command to the cluster and collect the results.  They 
 provide a special object that lives for a short period to coordinate the responses 
 automatically for you.
-
-#### `cluster query`
-
- - **-id**
- - **-collect** 
- - **-resolve**
- - **-command**
- - **-query**
- - **-timeout**
  
 ```tcl
 
@@ -193,6 +186,77 @@ after 5000 RunQuery
 vwait _forever_
 
 ```
+
+## Commands Reference
+
+### `$cluster`
+
+#### `$cluster heartbeat`
+
+#### `$cluster discover`
+
+#### `$cluster broadcast`
+
+#### `$cluster send`
+
+#### `$cluster query`
+
+ - **-id**
+ - **-collect** 
+ - **-resolve**
+ - **-command**
+ - **-query**
+ - **-timeout**
+
+#### `$cluster resolve`
+
+#### `$cluster resolver`
+
+#### `$cluster resolve_self`
+
+#### `$cluster tags`
+
+#### `$cluster flags`
+
+#### `$cluster services`
+
+#### `$cluster known_services`
+
+#### `$cluster config`
+
+#### `$cluster ttl`
+
+#### `$cluster uuid`
+
+#### `$cluster hook`
+
+### `$service`
+
+#### `$service resolve`
+
+#### `$service resolver`
+
+#### `$service query`
+
+#### `$service send`
+
+#### `$service info`
+
+#### `$service ip`
+
+#### `$service props`
+
+#### `$service tags`
+
+#### `$service local`
+
+#### `$service hid`
+
+#### `$service sid`
+
+#### `$service last_seen`
+
+#### `$service proto_props`
 
 ## Hooks
 

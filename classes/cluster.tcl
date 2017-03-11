@@ -560,13 +560,13 @@
   return $query
 }
 
-$cluster send \
-  -resolve   [list] \
-  -services  [list] \
-  -filter    [list] \
-  -protocols [list] \
-  -channel   0 \
-  -ruid      {} \
+# $cluster send \
+#   -resolve   [list] \
+#   -services  [list] \
+#   -filter    [list] \
+#   -protocols [list] \
+#   -channel   0 \
+#   -ruid      {} \
   
 # Resolve services by running a search against each $arg to return the 
 # filtered services which match every arg. Resolution is a simple "tag-based"

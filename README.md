@@ -50,14 +50,14 @@ up to you to add such functionality if needed (examples below).
 #### Reliable Multi-Protocol Negotiation
 
 Each member in the cluster advertises what protocols it knows how to use as well as the priority 
-of those protocols.  Other members use this to establish direct channels of communication when needed.  
+of those protocols. Other members use this to establish direct channels of communication when needed.  
 Should a protocol fail for any reason, the next will be attempted (and so on).
 
 #### Custom Protocol Handlers
 
 It is extremely easy to provide new protocols that cluster can utilize.  Simply follow the 
-general template provided by the included protocols.  Out of the box we support UDP, TCP, and 
-[Unix Sockets](https://sourceforge.net/projects/tcl-unixsockets/).  
+general template provided by the included protocols.  Out of the box we support [UDP](https://sourceforge.net/projects/tcludp/), 
+[TCP](https://www.tcl.tk/man/tcl8.6/TclCmd/socket.htm), and [Unix Sockets](https://sourceforge.net/projects/tcl-unixsockets/).  
 
 ## Quick Example
 

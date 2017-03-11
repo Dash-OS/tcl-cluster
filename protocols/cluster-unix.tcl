@@ -46,6 +46,10 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 # When we want to send data to this protocol we will call this with the
 # service that we are wanting to send the payload to. We should return 
 # 1 or 0 to indicate success of failure.
+#
+# $service is not strictly required by all protocols so it is possible that
+# it will not be included.  Should this protocol require a reference to the
+# service then it should simply throw an error.
 ::oo::define ::cluster::protocol::u method send { packet {service {}} } {
   try {
     # Get the props and data required from the service

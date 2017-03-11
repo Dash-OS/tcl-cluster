@@ -199,7 +199,31 @@ vwait _forever_
 
 ```
 
+## `cluster` API Reference 
+
+The top-level API is used to join a given cluster.
+
+#### cluster join *?..configuration?*
+ 
+All of the configuration options are optional.  It is valid to simply call cluster join 
+to utilize the default values. 
+
+ - **-address**
+ - **-port**
+ - **-ttl**
+ - **-heartbeat**
+ - **-channels**
+ - **-remote**
+ - **-tags**
+ - **-protocols**
+ - **-$proto_id**
+
+---
+
 ## `$cluster` Commands Reference
+
+Once we have joined the cluster, we will use the reference that was returned to coordinate 
+communication and requests.
 
 #### $cluster heartbeat *?props tags channel?*
 

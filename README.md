@@ -50,7 +50,7 @@ up to you to add such functionality if needed (examples below).
 #### Reliable Multi-Protocol Negotiation
 
 Each member in the cluster advertises what protocols it knows how to use as well as the priority 
-of those protocols. Other members use this to establish direct channels of communication when needed.  
+of those protocols. Other members use this to establish direct channels of communication when needed. 
 Should a protocol fail for any reason, the next will be attempted (and so on).
 
 #### Custom Protocol Handlers

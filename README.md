@@ -23,7 +23,7 @@ to modify a few of the initial procs to give data such as LAN IP's and MAC Addre
 ## Key Concepts
 
 `cluster` aims to provide a lightweight modular framework for cluster discovery, communications, 
-and coordination.  `cluster` members automatically discover each other and provide its preferred 
+and coordination.  `cluster` members automatically discover each other and provide their preferred 
 protocols for communication.  
 
 In a local environment, it's as simple as having both run `[cluster join]` and awaiting 
@@ -42,7 +42,22 @@ the context of the cluster.
 
 #### Customizable & Extendable
 
+`cluster` provides hooks that allow you each member to intercept evaluation at different 
+parts of the communications process.  This allows you to add security, new features, and/or 
+run tasks whenever needed.  We do not automatically execute any code within your interp, it is 
+up to you to add such functionality if needed (examples below).
+
+#### Reliable Multi-Protocol Negotiation
+
+Each member in the cluster advertises what protocols it knows how to use as well as the priority 
+of those protocols.  Other members use this to establish direct channels of communication when needed.  
+Should a protocol fail for any reason, the next will be attempted (and so on).
+
 #### Custom Protocol Handlers
+
+It is extremely easy to provide new protocols that cluster can utilize.  Simply follow the 
+general template provided by the included protocols.  Out of the box we support UDP, TCP, and 
+[Unix Sockets](https://sourceforge.net/projects/tcl-unixsockets/).  
 
 ## Quick Example
 

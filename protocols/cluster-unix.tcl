@@ -37,6 +37,9 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 ::oo::define ::cluster::protocol::u method proto {} { return u }
 
 # The props that are required to successfully negotiate with the protocol.
+# These are sent to the members of the cluster so that they can understand 
+# what steps should be taken to establish a communications channel when using
+# this protocol.
 ::oo::define ::cluster::protocol::u method props {} { 
   return [dict create \
     path $SERVER_PATH

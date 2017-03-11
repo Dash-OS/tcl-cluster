@@ -27,6 +27,9 @@ if { [info commands ::cluster::protocol::t] eq {} } {
 ::oo::define ::cluster::protocol::t method proto {} { return t }
 
 # The props that are required to successfully negotiate with the protocol.
+# These are sent to the members of the cluster so that they can understand 
+# what steps should be taken to establish a communications channel when using
+# this protocol.
 ::oo::define ::cluster::protocol::t method props {} { 
   return [dict create \
     port $PORT

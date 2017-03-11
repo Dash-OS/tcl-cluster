@@ -8,6 +8,7 @@ namespace eval ::cluster {
   # A coounter for ID's and such
   variable i 0
   
+  proc rand {min max} { expr { int( rand() * ( $max - $min + 1 ) + $min )} }
   # Our default configuration which also enforces the allowed arguments
   variable default_config [dict create \
     address     230.230.230.230 \
@@ -28,38 +29,31 @@ proc ::onError {r o args} {
 }
 proc ::~ msg { puts stderr $msg }
 
-# Random number between....
-proc ::cluster::rand {min max} { expr { int( rand() * ( $max - $min + 1 ) + $min )} }
 
 # Build our initial classes.  We do this here so we can easily 
 # replace code using definitions later.
 ::oo::class create ::cluster::cluster {}
 ::oo::class create ::cluster::service {}
 
-set bpacket_directory [file join [file dirname [file normalize [info script]]] bpacket]
-foreach file [glob -directory $bpacket_directory *.tcl] {
-  source $file
+proc ::cluster::source {} {
+  set bpacket_directory [file join [file dirname [file normalize [info script]]] bpacket]
+  foreach file [glob -directory $bpacket_directory *.tcl] {
+    uplevel #0 [list source $file]
+  }
+  set classes_directory [file join [file dirname [file normalize [info script]]] classes]
+  foreach file [glob -directory $classes_directory *.tcl] {
+    uplevel #0 [list source $file]
+  }
+  set protocol_directory [file join [file dirname [file normalize [info script]]] protocols]
+  foreach file [glob -directory $protocol_directory *.tcl] {
+   uplevel #0 [list source $file]
+  }
+  set utils_directory [file join [file dirname [file normalize [info script]]] utils]
+  foreach file [glob -directory $utils_directory *.tcl] {
+    uplevel #0 [list source $file]
+  }
+  rename ::cluster::source {}
 }
-unset bpacket_directory
-
-set classes_directory [file join [file dirname [file normalize [info script]]] classes]
-foreach file [glob -directory $classes_directory *.tcl] {
-  source $file
-}
-unset classes_directory
-
-# Automatically source protocols in the protocols directory
-set protocol_directory [file join [file dirname [file normalize [info script]]] protocols]
-foreach file [glob -directory $protocol_directory *.tcl] {
- source $file 
-}
-unset protocol_directory
-
-set utils_directory [file join [file dirname [file normalize [info script]]] utils]
-foreach file [glob -directory $utils_directory *.tcl] {
-  source $file
-}
-unset utils_directory
 
 proc ::cluster::join args {
   variable i
@@ -91,3 +85,5 @@ proc ::cluster::ifhook {hooks args} {
     tailcall dict get $hooks {*}$args
   }
 }
+
+::cluster::source

@@ -1,3 +1,5 @@
+
+
 ::oo::class create ::cluster::query {}
 
 ::oo::define ::cluster::query {

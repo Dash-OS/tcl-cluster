@@ -2,6 +2,7 @@
 ::oo::define ::cluster::cluster method broadcast { payload } {
   set proto [dict get $PROTOCOLS c] 
   try [my run_hook broadcast] on error {r} { return 0 }
+  try [my run_hook channel [dict get $payload channel] send] on error {r} { return 0 } 
   return [ $proto send [::cluster::packet::encode $payload] ]
 }
 

@@ -48,6 +48,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
     catch { my CreateServer }
     try {
       puts $SOCKET $packet
+      chan flush $SOCKET
     } on error {result options} {
       ::onError $result $options "While Sending to the Cluster"
       return 0
@@ -112,6 +113,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
   if { [chan eof $SOCKET] } {
     catch { chan close $SOCKET }
     after 0 [namespace code [list my CreateServer]]
+    return
   }
   set packet [read $SOCKET]
   $CLUSTER receive [self] $SOCKET $packet

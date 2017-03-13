@@ -86,6 +86,7 @@
     }
     6 {
       # Event
+      my hook $payload event
     }
     7 {
       # Flush Props / Replace with received data

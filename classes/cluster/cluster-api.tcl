@@ -24,6 +24,8 @@
 # Get our scripts UUID to send in payloads
 ::oo::define ::cluster::cluster method uuid {} { return ${SERVICE_ID}@${SYSTEM_ID} }
 
+::oo::define ::cluster::cluster method hid {} { return $SYSTEM_ID  }
+::oo::define ::cluster::cluster method sid {} { return $SERVICE_ID }
 # Retrieve how long a service should be cached by the protocol.  If we do not
 # hear from a given service for longer than the $ttl value, the service will be 
 # removed from our cache.
@@ -108,35 +110,101 @@
 # Examples:
 #  $cluster resolver -match -has [list *wait] -equal -some [list one two three]
 ::oo::define ::cluster::cluster method resolver args {
+  # In case we want to feed as a single value rather than a args list
+  if { [llength $args] == 1 } { set args [lindex $args 0] }
   set modifier equal
+  set op {}
   set services [my services]
-  foreach filter [split $args -] {
+  foreach filter $args {
     if { $filter eq {} } { continue }
     if { [llength $services] == 0 } { break }
-    lassign $filter opt tags
-    if { $tags eq {} } { set modifier $opt } else {
-      set services [lmap e $services {
-        if { [string is true -strict [$e resolver $tags $modifier $opt]] } {
-          set e
-        } else { continue }
-      }]
+    if { [string index $filter 0] eq "-" } {
+      set opt [string trimleft $filter "-"]
+      switch -glob -- $opt {
+        equal - match - regex* {
+          set op {}
+          set modifier $opt
+        }
+        default { set op $opt }
+      }
+      continue
     }
+    # This allows modifiers in object form { "-match": 1 }
+    if { $filter == 1 } { continue }
+    set services [lmap e $services {
+      if { [string is true -strict [$e resolver $filter $modifier $op]] } {
+        set e
+      } else { continue }
+    }]
   }
   return $services
 }
 
 # Resolve ourselves
-::oo::define ::cluster::cluster method resolve_self args {
+::oo::define ::cluster::cluster method resolve_self { tag {modifier equal} } {
+  switch -- $modifier {
+    equal { 
+      if { $tag in $TAGS } { return 1 }
+      if { [string equal $tag $SERVICE_ID] } { return 1 }
+      if { [string equal $tag $SYSTEM_ID]  } { return 1 } 
+      if { [my is_local $tag] } { return 1 }
+    }
+    match { 
+      foreach _tag $TAGS { if { [string match $tag ${_tag}] } { return 1 } }
+      if { [string match $tag $SERVICE_ID] } { return 1 }
+      if { [string match $tag $SYSTEM_ID]  } { return 1 }
+      # We dont match against the my islocal data at this time
+    }
+    regex {
+      # Not Finished
+    }
+  }
+  return 0
+}
+
+::oo::define ::cluster::cluster method resolver_self args {
+  if { [llength $args] == 1 } { set args [lindex $args 0] }
+  set modifier equal
+  set op {}
   foreach filter $args {
     if { $filter eq {} } { continue }
-    if { $filter in $TAGS } { continue }
-    if { [string equal $filter $SERVICE_ID] } { continue }
-    if { [string equal $filter $SYSTEM_ID]  } { continue}
-    # 127.0.0.1 or LAN IP's
-    if { [my is_local $filter] } { continue }
-    return 0
+    if { [string index $filter 0] eq "-" } {
+      set opt [string trimleft $filter "-"]
+      switch -glob -- $opt {
+        equal - match - regex* {
+          set op {}
+          set modifier $opt
+        }
+        default { set op $opt }
+      }
+      continue
+    }
+    # This allows modifiers in object form { "-match": 1 }
+    if { $filter == 1 } { continue }
+    switch -- $opt {
+      all - has {
+        # Must match every tag
+        foreach tag $filter { 
+          if { ! [my resolve_self $tag $modifier] } { return 0 } 
+        }
+        return 1
+      }
+      not {
+        # Must not match any of the tags
+        foreach tag $filter { 
+          if { [my resolve_self $tag $modifier] } { return 0 } 
+        }
+        return 1
+      }
+      some {
+        # Must have at least one $what
+        foreach tag $filter { 
+          if { [my resolve_self $tag $modifier] } { return 1 } 
+        }
+      }
+    }
   }
-  return 1
+  return 0
 }
 
 # Tags are sent to clients to give them an idea for what each service provides or

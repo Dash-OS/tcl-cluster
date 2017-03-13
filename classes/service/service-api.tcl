@@ -53,15 +53,23 @@
   switch -- $opt {
     all - has {
       # Must match every tag
-      foreach tag $tags { if { ! [my resolve $tag $modifier] } { return 0 } }
+      foreach tag $tags { 
+        if { ! [my resolve $tag $modifier] } { return 0 } 
+      }
+      return 1
     }
     not {
       # Must not match any of the tags
-      foreach tag $tags { if { [my resolve $tag $modifier] } { return 0 } }
+      foreach tag $tags { 
+        if { [my resolve $tag $modifier] } { return 0 } 
+      }
+      return 1
     }
     some {
       # Must have at least one $what
-      foreach tag $tags { if { [my resolve $tag $modifier] } { return 1 } }
+      foreach tag $tags { 
+        if { [my resolve $tag $modifier] } { return 1 } 
+      }
     }
   }
   return 0
@@ -103,6 +111,7 @@
 ::oo::define ::cluster::service method ip     {} { return $ADDRESS }
 ::oo::define ::cluster::service method props  {} { return $PROPS   }
 ::oo::define ::cluster::service method tags   {} { return $TAGS    }
+::oo::define ::cluster::service method resolver_tags   {} { return $RESOLVER    }
 ::oo::define ::cluster::service method local  {} { return $LOCAL   }
 ::oo::define ::cluster::service method hid    {} { return $SYSTEM_ID  }
 ::oo::define ::cluster::service method sid    {} { return $SERVICE_ID }

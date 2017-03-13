@@ -19,7 +19,7 @@
       set props [lsort -unique [concat $UPDATED_PROPS $props]]
       set UPDATED_PROPS [list]
       my CheckServices
-      my CheckProtocols
+      my CheckProtocols 
     }
     if { "tags" in $props } { set tags 1 }
     my broadcast [my heartbeat_payload $props $tags $channel]
@@ -52,21 +52,24 @@
 #   -ruid      {} \
 #   -data      {}
   
+  $cluster send -resolver [list \
+    -has [list one]
+  ]
 ::oo::define ::cluster::cluster method send { args } {
 
   set request [dict create]
   if { [dict exists $args -services] } {
-    set services [dict get $args -services] 
-  } else { set services [list] }
-  if { [dict exists $args -resolve] } {
-    # Resolve the given list.  Add to our services and call $cluster resolve
-    set services [concat $services [dict get $args -resolve]]
+    # A list of services to send to was provided directly
+    set services [dict get $args -services]
   }
-  
-  set services [my resolve $services]
-  puts "Services Resolved: $services"
-  if { $services eq {} } { return }
-  
+  if { [dict exists $args -resolver] } {
+    # Use the advanced resolver to discover the services to send to.
+    lappend services {*}[my resolver {*}[dict get $args -resolver]]
+  } elseif { [dict exists $args -resolve] } {
+    # Resolve the given list. 
+    lappend services {*}[my resolve [dict get $args -resolve]]
+  }
+
   set allow_broadcast 0
   
   if { [dict exists $args -broadcast] } {
@@ -84,6 +87,10 @@
     set allow_broadcast 1
   }
 
+  if { ! [string is true -strict $broadcast] } {
+    if { $services eq {} } { return } 
+  }
+  
   if { [dict exists $args -protocols] } {
     set protocols [dict get $args -protocols]
   } else {
@@ -124,7 +131,10 @@
     dict set request data [dict get $args -data] 
   }
   
-  if { [string is true -strict $broadcast] } {
+  # Make sure we only have one of each service
+  set services [lsort -unique $services]
+  
+  if { [string is true -strict $broadcast] && $services ne {} } {
     # If we are using the cluster protocol to transmit, we use broadcast
     # to send our payload.  This means that we also need to add a filter
     # to the request so that only our desired services will handle the 
@@ -141,8 +151,6 @@
   
   set payload [my event_payload $request $channel]
   
-  puts "Payload $payload"
-  
   if { [string is true -strict $broadcast] } {
     # We have indicated that we want to broadcast the message.
     my broadcast $payload
@@ -156,8 +164,8 @@
       # transmission
     } else {
       lassign $response success failed
-      puts "Success: $success"
-      puts "Failed:  $failed"
+      puts stderr "Success: $success"
+      puts stderr "Failed:  $failed"
       if { $failed ne {} } {
         # If we failed to send to any services we will determine how we should
         # proceed.

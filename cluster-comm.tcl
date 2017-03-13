@@ -22,12 +22,6 @@ namespace eval ::cluster {
   ]
 }
 
-# temporary 
-proc ::onError {r o args} {
-  puts stderr "Error: $r $args"
-  puts stderr $o
-}
-proc ::~ msg { puts stderr $msg }
 
 
 # Build our initial classes.  We do this here so we can easily 

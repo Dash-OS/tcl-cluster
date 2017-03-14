@@ -19,6 +19,7 @@
   if { [info exists tags] } { 
     if { $tags ne $TAGS } { 
       set TAGS $tags
+      my hook $payload tags changed
       my SetResolve
     }
   }

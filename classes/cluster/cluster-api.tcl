@@ -112,6 +112,10 @@
 ::oo::define ::cluster::cluster method resolver args {
   # In case we want to feed as a single value rather than a args list
   if { [llength $args] == 1 } { set args [lindex $args 0] }
+  if { [string index [string trim $args] 0] ne "-" } {
+    # We want to use regular resolve
+    return [my resolve $args]
+  }
   set modifier equal
   set op {}
   set services [my services]
@@ -165,7 +169,7 @@
 ::oo::define ::cluster::cluster method resolver_self args {
   if { [llength $args] == 1 } { set args [lindex $args 0] }
   set modifier equal
-  set op {}
+  set op {} ; set opt has
   foreach filter $args {
     if { $filter eq {} } { continue }
     if { [string index $filter 0] eq "-" } {
@@ -209,37 +213,59 @@
 
 # Tags are sent to clients to give them an idea for what each service provides or
 # wants other services to be aware of.  Tags are sent only when changed or when requested.
-::oo::define ::cluster::cluster method tags { {action {}} args } {
-  if { $action eq {} } { return $TAGS }
+# $cluster tags -append tag0 tag1 -map {tag1 tag2} -remove tag2 -append tag3 tag4
+# % tag0 tag3 tag4
+::oo::define ::cluster::cluster method tags { args } {
+  if { $args eq {} } { return $TAGS }
   set prev_tags $TAGS
-  if { [string equal [string index $action 0] -] } {
-    set action [string trimleft $action -]
-  } else {
-    set args [list $action {*}$args]
-    set action {}
-  }
-  if { $args ne {} } {
+  set action append
+  foreach arg $args {
+    if { [string equal [string index $arg 0] -] } {
+      set action [string trimleft $arg -]
+      continue
+    }
     switch -- $action {
-      append { lappend TAGS {*}$args }
-      remove { 
-        foreach tag $TAGS {
-          set TAGS [lsearch -all -inline -not -exact $TAGS $tag]
+      map {
+        # -map [list one two] - switch lindex 0 with lindex 1
+        set prev [lindex $arg 0]
+        set next [lindex $arg 1]
+        if { $next ne {} } {
+          set index [lsearch $TAGS $prev]
+          if { $index != -1 } {
+            set TAGS [lreplace $TAGS $index $index $next]
+          }
         }
       }
-      replace - default { set TAGS $args }
+      mappend {
+        # similar to -map except that it will add the second tag even if the
+        # first does not exist
+        set prev [lindex $arg 0]
+        set next [lindex $arg 1]
+        if { $prev in $TAGS } {
+          set TAGS [lsearch -all -inline -not -exact $TAGS $prev]
+        }
+        if { $next ne {} && $next ni $TAGS } { lappend TAGS $next }
+      }
+      remove {
+        if { $arg in $TAGS } {
+          set TAGS [lsearch -all -inline -not -exact $TAGS $arg]
+        }
+      }
+      replace {
+        # -replace will replace the tags with this arg then switch to append for
+        # any tags after it
+        set action append
+        set TAGS $arg
+      }
+      lappend - append {
+        if { $arg ne {} && $arg ni $TAGS } { lappend TAGS $arg }
+      }
     }
-  }
-  try [my run_hook tags update] on error {r} {
-    # If we receive an error during the hook, we will revert to the previous tags
-    set TAGS $prev_tags
   }
   if { $prev_tags ne $TAGS } {
     # If our tags change, our change hook will fire
-    set UPDATED_PROPS [concat $UPDATED_PROPS [list tags]]
-    try [my run_hook tags changed] on error {r} {
-      # We don't do anything if this produces error, use update for that.  This
-      # should be used when a tag update is accepted, for example if we wanted to
-      # then broadcast to the cluster with our updated tags.
+    if { "tags" ni $UPDATED_PROPS } {
+      set UPDATED_PROPS [concat $UPDATED_PROPS [list tags]]  
     }
   }
   return $TAGS

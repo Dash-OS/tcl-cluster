@@ -55,10 +55,9 @@
 }
 
 # Not for hooks that must be mutated.
-::oo::define ::cluster::service method hook { context args } {
+::oo::define ::cluster::service method hook { payload args } {
   set service [self]
   set cluster $CLUSTER
-  dict with context {}
   return [ $CLUSTER run_hook {*}$args ]
 }
 

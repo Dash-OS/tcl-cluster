@@ -51,20 +51,17 @@
 #   -channel   0 \
 #   -ruid      {} \
 #   -data      {}
-  
-  $cluster send -resolver [list \
-    -has [list one]
-  ]
+
 ::oo::define ::cluster::cluster method send { args } {
 
   set request [dict create]
   if { [dict exists $args -services] } {
     # A list of services to send to was provided directly
     set services [dict get $args -services]
-  }
+  } else { set services [list] }
   if { [dict exists $args -resolver] } {
     # Use the advanced resolver to discover the services to send to.
-    lappend services {*}[my resolver {*}[dict get $args -resolver]]
+    lappend services {*}[my resolver [dict get $args -resolver]]
   } elseif { [dict exists $args -resolve] } {
     # Resolve the given list. 
     lappend services {*}[my resolve [dict get $args -resolve]]
@@ -76,6 +73,7 @@
     # 1 / 0 - Indicates if we want to broadcast the message or not.
     # If empty we will try to decide automatically.
     set broadcast [dict get $args -broadcast] 
+    if { $broadcast eq {} } { set allow_broadcast 1 }
   } else { 
     # When broadcast is empty we are indicating that we are not yet
     # sure if we want to broadcast the message.

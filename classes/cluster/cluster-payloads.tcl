@@ -15,6 +15,8 @@
       q*              { set type 4 }
       res* - answ*    { set type 5 }
       event           { set type 6 }
+      flush*          { set type 7 }
+      fail*           { set type 8 }
       default { throw error "Unknown Type: $type" }
     } 
   }
@@ -90,4 +92,9 @@
 # Event Payload is sent when we simply want to send data to a member of the cluster. 
 ::oo::define ::cluster::cluster method event_payload { request channel {tags 0} {flags 0} } {
   return [ my payload 6 $channel $request $tags $flags ]
+}
+
+# Event Payload is sent when we simply want to send data to a member of the cluster. 
+::oo::define ::cluster::cluster method failed_payload { request {channel 0} {tags 0} {flags 0} } {
+  return [ my payload 8 $channel [dict create data $request] $tags $flags ]
 }

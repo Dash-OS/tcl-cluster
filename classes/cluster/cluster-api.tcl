@@ -111,35 +111,40 @@
 #  $cluster resolver -match -has [list *wait] -equal -some [list one two three]
 ::oo::define ::cluster::cluster method resolver args {
   # In case we want to feed as a single value rather than a args list
-  if { [llength $args] == 1 } { set args [lindex $args 0] }
-  if { [string index [string trim $args] 0] ne "-" } {
-    # We want to use regular resolve
-    return [my resolve $args]
-  }
-  set modifier equal
-  set op {}
-  set services [my services]
-  foreach filter $args {
-    if { $filter eq {} } { continue }
-    if { [llength $services] == 0 } { break }
-    if { [string index $filter 0] eq "-" } {
-      set opt [string trimleft $filter "-"]
-      switch -glob -- $opt {
-        equal - match - regex* {
-          set op {}
-          set modifier $opt
-        }
-        default { set op $opt }
-      }
-      continue
+  try {
+    if { [llength $args] == 1 } { set args [lindex $args 0] }
+    if { [string index [string trim $args] 0] ne "-" } {
+      # We want to use regular resolve
+      return [my resolve $args]
     }
-    # This allows modifiers in object form { "-match": 1 }
-    if { $filter == 1 } { continue }
-    set services [lmap e $services {
-      if { [string is true -strict [$e resolver $filter $modifier $op]] } {
-        set e
-      } else { continue }
-    }]
+    set modifier equal
+    set op {}
+    set services [my services]
+    foreach filter $args {
+      if { $filter eq {} } { continue }
+      if { [llength $services] == 0 } { break }
+      if { [string index $filter 0] eq "-" } {
+        set opt [string trimleft $filter "-"]
+        switch -glob -- $opt {
+          equal - match - regex* {
+            set op {}
+            set modifier $opt
+          }
+          default { set op $opt }
+        }
+        continue
+      }
+      # This allows modifiers in object form { "-match": 1 }
+      if { $filter == 1 } { continue }
+      set services [lmap e $services {
+        if { [string is true -strict [$e resolver $filter $modifier $op]] } {
+          set e
+        } else { continue }
+      }]
+    }
+  } on error {result options} {
+    ::onError $result $options "While Resolving Cluster Services" $args
+    if { ! [info exists services] } { set services {} }
   }
   return $services
 }
@@ -265,9 +270,12 @@
   if { $prev_tags ne $TAGS } {
     # If our tags change, our change hook will fire
     if { "tags" ni $UPDATED_PROPS } {
-      set UPDATED_PROPS [concat $UPDATED_PROPS [list tags]]  
+      lappend UPDATED_PROPS tags
     }
   }
+  # For now, we will heartbeat after changing tags so our partners get the
+  # new tags immediately.
+  after 0 [callback my heartbeat]
   return $TAGS
 }
 

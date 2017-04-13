@@ -12,7 +12,7 @@
     }
   } else { 
     dict set SERVICES_TO_PING services $service_id
-    dict set SERVICES_TO_PING after_id [after 10000 [namespace code [list my send_service_ping]]]
+    dict set SERVICES_TO_PING after_id [after 5000 [namespace code [list my send_service_ping]]]
   }
 }
 
@@ -23,7 +23,9 @@
   if { $services ne {} } {
     # Broadcast our ping request to the cluster
     my broadcast [my ping_payload $services]
+    my expect_services $services
   }
+  
   unset SERVICES_TO_PING
 }
 
@@ -72,9 +74,11 @@
       set service [lsearch -inline -glob $known_services *${service_id}*]
       if { $service ne {} } {
         # We found the service being pinged, we will reduce its TTL so that it must report
-        # to the cluster within the next 30 seconds or it will be removed from this member.
-        $service expected 30
+        # to the cluster within the next 20 seconds or it will be removed from this member.
+        $service expected 20
       }
     }
   }
+  # Schedule a service check after 30 seconds 
+  my ScheduleServiceCheck
 }

@@ -23,14 +23,15 @@ if { [info commands ::cluster::protocol::u] eq {} } {
     throw error "u config must exist in cluster configuration"
   }
   if { ! [dict exists $config u path] } {
-    throw error "Must define a path for our unix server within the u config" 
+    throw error "Must define a path or prefix path for our unix server within the u config" 
   }
   set SERVER_PATH [file normalize [file nativename [dict get $config u path]]]
+  append SERVER_PATH - [$CLUSTER sid]
   my CreateServer
 }
 
 ::oo::define ::cluster::protocol::u destructor {
-  catch { my CloseSocket $SOCKET }
+  catch { my CloseSocket $SOCKET {} 0 }
 }
 
 ## Expected Accessors which every protocol must have.
@@ -53,10 +54,10 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 # $service is not strictly required by all protocols so it is possible that
 # it will not be included.  Should this protocol require a reference to the
 # service then it should simply throw an error.
-::oo::define ::cluster::protocol::u method send { packet {service {}} } {
+::oo::define ::cluster::protocol::u method send { packet {service {}} {attempts {}} } {
   try {
     # Get the props and data required from the service
-    if { $service eq {} } { throw error "No Service Provided to UDP Protocol" }
+    if { $service eq {} } { throw error "No Service Provided to UNIX Protocol" }
     # Since this is a local protocol, we will only attempt to send if the
     # service is a local service
     if { ! [$service local] } { return 0 }
@@ -76,7 +77,9 @@ if { [info commands ::cluster::protocol::u] eq {} } {
       puts -nonewline $sock $packet
     }
     return 1
-  } on error {r} {}
+  } on error {r} {
+    puts "UNIX SOCKET FAIL: $r"
+  }
   return 0
 }
 
@@ -99,44 +102,78 @@ if { [info commands ::cluster::protocol::u] eq {} } {
   ]
 }
 
-# On each heartbeat, each of our protocol handlers receives a heartbeat call.
-# This allows the service to run any commands that it needs to insure that it
-# is still operating as expected.
-::oo::define ::cluster::protocol::u method heartbeat {} {
-  if { ! [file exists $SERVER_PATH] } { my CreateServer }
+::oo::define ::cluster::protocol::u method event { event args } {
+  switch -- $event {
+    heartbeat {
+      # On each heartbeat, each of our protocol handlers receives a heartbeat call.
+      # This allows the service to run any commands that it needs to insure that it
+      # is still operating as expected.
+      if { ! [file exists $SERVER_PATH] || ( [info exists SOCKET] && ( [eof $SOCKET] || [chan names $SOCKET] eq {} ) ) } { 
+        my CreateServer 
+      }
+    }
+    refresh {
+      # When a failure is reported we will refresh our socket and connection
+      puts "Refreshing UNIX!"
+      my CreateServer
+    }
+    service_lost {
+      # When a service is lost, each protocol is informed in case it needs to do cleanup
+      lassign $args service
+      # For UNIX Sockets, when a service has been lost we will be removing the 
+      # UNIX Socket File from the filesystem.  This is so we don't get spammed
+      # with too many sockets that are not needed.  If a service actually exists, 
+      # it will re-create the file upon the next heartbeat.
+      set props [$service proto_props u]
+      if { [dict exists $props path] } {
+        set file [dict get $props path]
+        if { [file exists $file] } {
+          file delete -force -- $file 
+        }
+      }
+    }
+  }
 }
 
 ## Below are methods that are either specific to the protocol or that are 
 ## not required by the cluster.
 
 ::oo::define ::cluster::protocol::u method CreateServer { } {
-  if { [file exists $SERVER_PATH] } { file delete -force $SERVER_PATH }
   if { [info exists SOCKET] } { catch { my CloseSocket $SOCKET } }
+  if { [file exists $SERVER_PATH] } { file delete -force -- $SERVER_PATH }
   set SOCKET [::unix_sockets::listen $SERVER_PATH [namespace code [list my Connect $SERVER_PATH {}]]]
+  $CLUSTER event channel server [my proto] $SOCKET
 } 
 
-::oo::define ::cluster::protocol::u method Connect { path service chanID  } {
+::oo::define ::cluster::protocol::u method Connect { path service chanID } {
   chan configure $chanID -blocking 0 -translation binary -buffering none
   chan event $chanID readable [namespace code [list my Receive $chanID]]
-  $CLUSTER event channel open [self] $chanID $service
+  $CLUSTER event channel open [my proto] $chanID $service
 }
 
 ::oo::define ::cluster::protocol::u method Receive { chanID } {
   try {
-    if { [chan eof $chanID] } { 
-      my CloseSocket $chanID 
+    if { [eof $chanID] || [catch {read $chanID} data] } { 
+      set reset 1 
+    } else { $CLUSTER receive [my proto] $chanID $data }
+  } on error {result} {
+    ::onError $result $options "While Receiving Data from UNIX Cluster Comm"
+    set reset 1
+  } finally {
+    if { [info exists reset] && [string is true -strict $reset] } {
+      my CloseSocket $chanID  
       if { $chanID eq $SOCKET } { my CreateServer }
-    } else {
-      $CLUSTER receive [self] $chanID [read $chanID]
     }
-  } on error {result options} {
-    ::onError $result $options "Cluster - Unix Socket Receive Error"
   }
+  
 }
 
 ::oo::define ::cluster::protocol::u method CloseSocket { chanID {service {}} } {
   catch { chan close $chanID }
-  $CLUSTER event channel close [self] $chanID $service
+  if { $chanID eq $SOCKET } {
+    unset SOCKET
+  }
+  $CLUSTER event channel close [my proto] $chanID $service
 }
 
 ::oo::define ::cluster::protocol::u method OpenSocket { service } {

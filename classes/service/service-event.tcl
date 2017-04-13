@@ -9,6 +9,7 @@
 }
 
 ::oo::define ::cluster::service method ChannelEvent { action proto chanID } {
+  #puts "Service Event Protocol is $proto $action"
   set protocol [$proto proto]
   switch -nocase -glob -- $action {
     cl* - close {

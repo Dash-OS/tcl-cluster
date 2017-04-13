@@ -1,6 +1,7 @@
 ::oo::define ::cluster::service method heartbeat { {data {}} } {
   set LAST_HEARTBEAT [clock seconds]
   if { $data ne {} } {
+    puts "Service Props Received! $data"
     set PROPS [dict merge $PROPS $data] 
   }
   my variable SERVICE_EXPECTED
@@ -12,12 +13,11 @@
   }
 }
 
-::oo::define ::cluster::service method receive { proto chanID payload descriptor } {
-  #puts "[self] receives from $proto - $chanID"
+::oo::define ::cluster::service method receive { proto chanID payload descriptor remaining } {
+  
   set data {}
   set protocol [$proto proto]
   dict with payload {}
-  puts "Receiving on Channel: $channel"
   # Did our partner provide us with a request uid?  If so, any reply will include the
   # ruid so it can identify the request.
   if { [info exists ruid] } { dict set response ruid $ruid } else { set response {} }
@@ -27,7 +27,8 @@
   if { ! [info exists keepalive] } { 
     set keepalive 0 
   } else { dict set response keepalive $keepalive }
-  
+  #puts "[self] receives from $proto - $chanID - $type"
+  #puts "RECEIVE $proto | $type"
   switch -- $type {
     0 {
       # Disconnect
@@ -92,6 +93,22 @@
       # Flush Props / Replace with received data
       set PROPS $data
     }
+    8 {
+      # Failure
+      # | When a cluster member has failed when attempting to work with this
+      # | service, we receive a notification from that service to let us know 
+      # | that we need to attempt to provide a resolution. 
+      # puts "Failure Reported!"
+      # puts $data
+      if { [dict exists $data protocols] } {
+        foreach protocol [dict get $data protocols] {
+          set ref [$CLUSTER protocol $protocol]
+          if { $ref ne {} } {
+            catch { $ref event refresh }
+          }
+        }
+      }
+    }
   }
   if { [info exists NEW] } {
     unset NEW
@@ -100,5 +117,15 @@
     # initial heartbeat.
     after 1000 [namespace code [list my hook $payload service discovered]]
   }
-  $proto done [self] $chanID $keepalive
+  # ~! "Proto Done" "Proto Done $chanID $keepalive" \
+  #   -context "
+  #     $descriptor
+      
+  #     $payload
+      
+  #   "
+  if { $remaining == 0 } {
+    $proto done [self] $chanID $keepalive
+  }
+  
 }

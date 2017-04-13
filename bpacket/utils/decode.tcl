@@ -36,7 +36,7 @@
     set x [expr {((127 & $i) << 25) | $field}]
     return [list $field $wire]
   }
-  error "*** Spec says we never should reach here!"
+  throw SPEC_ERROR "*** Spec says we never should reach here!"
 }
 
 ::oo::define ::bpacket::reader method uint64 {} {
@@ -100,7 +100,16 @@
 
 # get each data piece
 ::oo::define ::bpacket::reader method next {} {
-  if { [string equal [string range $BUFFER 0 1] \x00\x00] } { return 0 }
+  if { [string equal [string range $BUFFER 0 1] \x00\x00] } { 
+    # Is another packet possibly available?
+    #puts [string bytelength $BUFFER]
+    if { [string bytelength $BUFFER] > 4 } {
+      # If we have more data, we move to the next packet
+      set BUFFER [string range $BUFFER 2 end]
+      return [list 2]
+    }
+    return [list 0]
+  }
   if { [string bytelength $BUFFER] <= 3 } { return 0 }
   set id   [my varint]
   set type [my varint]
@@ -141,11 +150,10 @@
     20 {  # AES Encrypted with pre-shared key
           # TODO: Possibly encrypt the data using a configured
           #       encryption key.  
-      puts Encrypted
       set data [my string]
     }
     default {
-      throw error "Malformed Packet"
+      throw MALFORMED_PACKET "Malformed Packet"
     }
   }
   return [list 1 $id $type $data]

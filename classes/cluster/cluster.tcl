@@ -31,11 +31,15 @@
 # access to the pieces they may need to clean themselves up.
 ::oo::define ::cluster::cluster destructor {
   my variable SERVICES_TO_PING
+  my variable SERVICE_CHECK_ID
   if { [info exists SERVICES_TO_PING] } {
     # Cancel our ping request
     if { [dict exists $SERVICES_TO_PING after_id] } {
       after cancel [dict get $SERVICES_TO_PING after_id] 
     }
+  }
+  if { [info exists SERVICE_CHECK_ID] } {
+    after cancel $SERVICE_CHECK_ID 
   }
   after cancel $AFTER_ID
   if { [namespace exists ${NS}::services] } {
@@ -69,6 +73,8 @@
 # command space where the protocol will receive [self] $ID $config arguments and should 
 # provide capabilities for both sending and receiving using the protocol.
 ::oo::define ::cluster::cluster method BuildProtocols {} {
+  puts "Build Protocols [dict get $CONFIG protocols]"
+  set PROTOCOLS [dict create]
   namespace eval ${NS}::protocols {}
   foreach protocol [dict get $CONFIG protocols] {
     if { [info commands ::cluster::protocol::$protocol] ne {} } {
@@ -78,12 +84,13 @@
         ]
     } else {
       # If we do not know the given protocol, raise an error
+      puts fail
       throw error "Unknown Cluster Protocol Requested: $protocol"
     }
   }
 }
 
-::oo::define ::cluster::cluster method CheckServices {} {
+::oo::define ::cluster::cluster method CheckServices { {remove_scheduled 0} } {
   # Check through each of our services to see if they have expired
   foreach service [my services] {
     try {
@@ -97,10 +104,27 @@
       catch { $service destroy }
     }
   }
+  if { [string is true -strict $remove_scheduled] } {
+    my variable SERVICE_CHECK_ID
+    if { [info exists SERVICE_CHECK_ID] } {
+      after cancel $SERVICE_CHECK_ID
+      unset SERVICE_CHECK_ID
+    }
+  }
+}
+
+::oo::define ::cluster::cluster method ScheduleServiceCheck { {ms 30000} {force 0} } {
+  my variable SERVICE_CHECK_ID
+  # Only schedule one if we havent done-so already or if force is provided
+  if { [info exists SERVICE_CHECK_ID] && [string is false -strict $force] } { return } else {
+    # If force is provided, cancel the previous check before we schedule the next one.
+    if { [info exists SERVICE_CHECK_ID] } { after cancel $SERVICE_CHECK_ID }
+    set SERVICE_CHECK_ID [ after $ms [namespace code [list my CheckServices 1]] ]
+  }
 }
 
 ::oo::define ::cluster::cluster method CheckProtocols {} {
-  dict for { protocol proto } $PROTOCOLS { catch { $proto heartbeat } }
+  dict for { protocol proto } $PROTOCOLS { catch { $proto event heartbeat } }
 }
 
 # Gather the public properties of each protocol that we support.

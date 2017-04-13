@@ -15,7 +15,7 @@ proc ::cluster::shortid::shuffle { list {max {}}} {
 }
 
 proc ::cluster::shortid::encode { str {type base64} } {
-  tailcall string map { {=} {} } [binary encode $type $str]
+  return [string map { {=} {} } [binary encode $type $str]]
 }
 
 proc ::cluster::shortid::shuffle_string { str {max {}} } { 

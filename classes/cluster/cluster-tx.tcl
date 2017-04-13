@@ -1,9 +1,13 @@
 # Broadcast to the cluster.  This is a shortcut to send to the cluster protocol.
 ::oo::define ::cluster::cluster method broadcast { payload } {
-  set proto [dict get $PROTOCOLS c] 
-  try [my run_hook broadcast] on error {r} { return 0 }
-  try [my run_hook channel [dict get $payload channel] send] on error {r} { return 0 } 
-  return [ $proto send [::cluster::packet::encode $payload] ]
+  try {
+    set proto [dict get $PROTOCOLS c] 
+    try {my run_hook broadcast} on error {r} { return 0 }
+    try {my run_hook channel [dict get $payload channel] send} on error {r} { return 0 } 
+    return [ $proto send [::cluster::packet::encode $payload] ]
+  } on error {result options} {
+    ::onError $result $options "While Broadcasting a Cluster Payload" $payload
+  }
 }
 
 # We send a heartbeat to the cluster at the given interval.  Any listening services
@@ -25,6 +29,18 @@
     my broadcast [my heartbeat_payload $props $tags $channel]
   } on error {result options} {
     ::onError $result $options "While sending a cluster heartbeat"
+  }
+}
+
+# Reschedule the heartbeat so that it will occur after the given time.  This is useful
+# for when we want to cause a heartbeat to occur sooner than the normal time but dont 
+# want to accidentally dispatch tons of heartbeats when multiple services call it, etc.
+::oo::define ::cluster::cluster method heartbeat_after { ms } {
+  try {
+    after cancel $AFTER_ID
+    set AFTER_ID [ after $ms [namespace code [list my heartbeat]] ]
+  } on error {result options} {
+    ::onError $result $options "While scheduling a cluster heartbeat"
   }
 }
 
@@ -66,7 +82,9 @@
     # Resolve the given list. 
     lappend services {*}[my resolve [dict get $args -resolve]]
   }
-
+  
+  #puts "Send to services [llength $services]"
+  #puts $services
   set allow_broadcast 0
   
   if { [dict exists $args -broadcast] } {
@@ -162,12 +180,21 @@
       # transmission
     } else {
       lassign $response success failed
-      puts stderr "Success: $success"
-      puts stderr "Failed:  $failed"
+      # puts stderr "Success: $success"
+      
       if { $failed ne {} } {
+        #puts stderr "Failed:  $failed"
         # If we failed to send to any services we will determine how we should
         # proceed.
-        
+        # ::utils::flog "Failed to Send To Cluster Services \n $args \n $failed"
+        # ~! "Cluster Warning" "Failed to send to Cluster Services" \
+        #   -context "
+        #     Success: 
+        #     $success
+        #     ------------
+        #     Failed: 
+        #     $failed
+        #   "
       }
     }
   }
@@ -179,7 +206,7 @@
 
 ::oo::define ::cluster::cluster method send_payload { services payload protocols {allow_broadcast 0} } {
   set success [dict create] ; set failed [dict create]
-  try [ my run_hook channel [dict get $payload channel] send ] on error { r } { return }
+  try {my run_hook channel [dict get $payload channel] send} on error { r } { return }
   foreach service $services {
     try {
       set result [ $service send $payload $protocols $allow_broadcast ]

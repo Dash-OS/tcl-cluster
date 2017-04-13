@@ -133,6 +133,7 @@ set ::bpacket::value_ids [dict create \
   }
   set n 0; set sh 0
   while 1 {
+
     set b [expr {($byte >> $sh) & 127}]
     incr sh 7; incr n
     if {$byte >> $sh} {

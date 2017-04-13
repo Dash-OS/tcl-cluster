@@ -22,7 +22,12 @@ namespace eval ::cluster {
   ]
 }
 
-
+if { [info commands ::onError] eq {} } {
+  # Our Error Handler is called throughout.  If not defined, we define it
+  # here.  
+  # TODO: Provide official way to handle the logging / errors.
+  proc ::onError { result options args } {}
+}
 
 # Build our initial classes.  We do this here so we can easily 
 # replace code using definitions later.
@@ -50,7 +55,6 @@ proc ::cluster::source {} {
 }
 
 proc ::cluster::join args {
-  variable i
   set config $::cluster::default_config
   if { [dict exists $args -protocols] } {
     set protocols [dict get $args -protocols]
@@ -66,7 +70,7 @@ proc ::cluster::join args {
     }
     dict set config $k $v
   }
-  set id [incr i]
+  set id [incr ::cluster::i]
   return [::cluster::cluster create ::cluster::clusters::cluster_$id $id $config]
 }
 

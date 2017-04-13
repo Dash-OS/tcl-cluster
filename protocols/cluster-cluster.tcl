@@ -41,13 +41,13 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 ::oo::define ::cluster::protocol::c method send { packet {service {}} } {
   try {
     if { [string bytelength $packet] > 0 } {
-      puts $SOCKET $packet
+      puts -nonewline $SOCKET $packet
       chan flush $SOCKET
     }
   } on error {result options} {
     catch { my CreateServer }
     try {
-      puts $SOCKET $packet
+      puts -nonewline $SOCKET $packet
       chan flush $SOCKET
     } on error {result options} {
       ::onError $result $options "While Sending to the Cluster"
@@ -77,8 +77,22 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # On each heartbeat, each of our protocol handlers receives a heartbeat call.
 # This allows the service to run any commands that it needs to insure that it
 # is still operating as expected.
-::oo::define ::cluster::protocol::c method heartbeat {} {
-
+::oo::define ::cluster::protocol::c method event { event args } {
+  switch -- $event {
+    refresh {
+      puts "Refresh UDP"
+    }
+    heartbeat {
+      # On each heartbeat, each of our protocol handlers receives a heartbeat call.
+      # This allows the service to run any commands that it needs to insure that it
+      # is still operating as expected.
+      
+    }
+    service_lost {
+      # When a service is lost, each protocol is informed in case it needs to do cleanup
+      lassign $args service
+    }
+  }
 }
 
 
@@ -116,5 +130,5 @@ if { [info commands ::cluster::protocol::c] eq {} } {
     return
   }
   set packet [read $SOCKET]
-  $CLUSTER receive [self] $SOCKET $packet
+  $CLUSTER receive [my proto] $SOCKET $packet
 }

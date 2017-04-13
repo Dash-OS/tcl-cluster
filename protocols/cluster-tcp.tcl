@@ -36,13 +36,6 @@ if { [info commands ::cluster::protocol::t] eq {} } {
   ]
 }
 
-# Called by our service when we have finished parsing the received data. It includes
-# information as-to how the completed data should be parsed.
-# Cluster ignores any close requests due to no keep alive.
-::oo::define ::cluster::protocol::t method done { service chanID keepalive {response {}} } {
-  if { [string is false $keepalive] } { my CloseSocket $chanID $service }
-}
-
 # A service descriptor is used to define a protocols properties and to aid in 
 # securing the protocol and understanding how we need to negotiate with it.  
 # Every descriptor is expected to provide an "address" key.  Other than that it 
@@ -60,9 +53,25 @@ if { [info commands ::cluster::protocol::t] eq {} } {
 # On each heartbeat, each of our protocol handlers receives a heartbeat call.
 # This allows the service to run any commands that it needs to insure that it
 # is still operating as expected.
-::oo::define ::cluster::protocol::t method heartbeat {} {
-  
+::oo::define ::cluster::protocol::t method event { event args } {
+  switch -- $event {
+    heartbeat {
+      # On each heartbeat, each of our protocol handlers receives a heartbeat call.
+      # This allows the service to run any commands that it needs to insure that it
+      # is still operating as expected.
+    }
+    refresh {
+      puts "Refresh TCP Socket"
+      my CreateServer
+      $CLUSTER heartbeat
+    }
+    service_lost {
+      # When a service is lost, each protocol is informed in case it needs to do cleanup
+      lassign $args service
+    }
+  }
 }
+
 
 # When we want to send data to this protocol we will call this with the
 # service that we are wanting to send the payload to. We should return 
@@ -79,19 +88,27 @@ if { [info commands ::cluster::protocol::t] eq {} } {
     # we can, continue - otherwise open a new connection to the client.
     set sock [$service socket t]
     if { $sock ne {} } {
+      puts "Sending to Previous Socket: $sock"
       try {
-        puts -nonewline $sock $packet
+        if { [chan eof $sock] } {
+          set sock {}
+        } else {
+          puts -nonewline $sock $packet
+        }
       } on error {result options} {
         my CloseSocket $sock $service
         set sock {}
       }
     }
     if { $sock eq {} } {
+      puts "Opening Socket"
       set sock [my OpenSocket $service]
       puts -nonewline $sock $packet
     }
     return 1
-  } on error {r} {}
+  } on error {r} {
+    puts "Error Sending to TCP Socket: $r"
+  }
   return 0
 }
 
@@ -99,38 +116,58 @@ if { [info commands ::cluster::protocol::t] eq {} } {
 ## not required by the cluster.
 
 ::oo::define ::cluster::protocol::t method CreateServer {} {
+  if { [info exists SOCKET] } { 
+    catch { my CloseSocket $SOCKET }
+  }
   set SOCKET [socket -server [namespace code [list my Connect]] 0]
   set PORT   [lindex [chan configure $SOCKET -sockname] end]
+  $CLUSTER event channel server [my proto] $SOCKET
 } 
 
 ::oo::define ::cluster::protocol::t method Connect { chanID address port {service {}} } {
   chan configure $chanID -blocking 0 -translation binary -buffering none
   chan event $chanID readable [namespace code [list my Receive $chanID]]
-  $CLUSTER event channel open [self] $chanID $service
+  $CLUSTER event channel open [my proto] $chanID $service
 }
 
 ::oo::define ::cluster::protocol::t method Receive { chanID } {
   try {
-    if { [chan eof $chanID] } { my CloseSocket $chanID } else {
-      $CLUSTER receive [self] $chanID [read $chanID]
+    set data [read $chanID]
+    if { [chan eof $chanID] } { 
+      my CloseSocket $chanID 
+    }
+    if { [string bytelength $data] > 0 } {
+      $CLUSTER receive [my proto] $chanID $data
     }
   } on error {result options} {
+    puts "tcp error $result"
     ::onError $result $options "Cluster - TCP Receive Error" $chanID
   }
 }
 
 ::oo::define ::cluster::protocol::t method CloseSocket { chanID {service {}} } {
   catch { chan close $chanID }
-  $CLUSTER event channel close [self] $chanID $service
+  $CLUSTER event channel close [my proto] $chanID $service
 }
 
 ::oo::define ::cluster::protocol::t method OpenSocket { service } {
   set props [$service proto_props t]
+  puts "props $props"
   if { $props eq {} } { throw error "Services TCP Protocol Props are Unknown" }
   if { ! [dict exists $props port] } { throw error "Unknown TCP Port for $service" }
   set address [$service ip]
   set port    [dict get $props port]
+  puts "Connecting to $address | $port"
   set sock    [socket $address $port]
   my Connect $sock $address $port $service
   return $sock
+}
+
+# Called by our service when we have finished parsing the received data. It includes
+# information as-to how the completed data should be parsed.
+# Cluster ignores any close requests due to no keep alive.
+::oo::define ::cluster::protocol::t method done { service chanID keepalive {response {}} } {
+  if { [string is false $keepalive] } {
+    my CloseSocket $chanID $service 
+  }
 }

@@ -28,6 +28,9 @@
   set NEW        1
   if { [dict exists $descriptor local] } {
     set LOCAL [dict get $descriptor local] 
+    # If we are local then we need to set ADDRESS to our
+    # own IP.
+    set ADDRESS 127.0.0.1
   } else { set LOCAL [$CLUSTER is_local $ADDRESS] }
   my SetResolve
   # Confirm that we can validate this service using our standard validate method.  This is called
@@ -43,7 +46,7 @@
       $proto done [self] $chanID 0
     }
     # Report the service being lost to the cluster
-    $CLUSTER service_lost [self]
+    $CLUSTER event service lost [self]
   } on error {result options} {
     ::onError $result $options "While Removing a Cluster Service"
   }

@@ -274,6 +274,16 @@ Send a heartbeat to the cluster, informing them of your presence on the cluster.
 handled automatically but can be sent manually if desired.  We have a few optional arguments 
 that may be included.
 
+> More Information Coming Soon...
+
+---
+
+#### $cluster heartbeat_after milliseconds
+
+Reschedule the heartbeat so that it will occur after the given time.  This is useful
+for when we want to cause a heartbeat to occur sooner than the normal time but dont 
+want to accidentally dispatch tons of heartbeats when multiple services call it, etc.
+
 ---
 
 #### $cluster discover
@@ -294,7 +304,29 @@ dict.
 
 #### $cluster send *...args*
 
-> More Information Coming Soon...
+When we want to send data to our cluster, the `[cluster send]` command allows us to do so.  It includes 
+various optional arguments that assist us with defining which services should receive the payload.  Cluster 
+will determine from the final list of services what the best method will be to efficiently handle the dispatch. 
+
+> **Note:** If multiple arguments are provided which resolve to services, the final list will be the merged result of unique services.
+
+##### $cluster send arguments
+
+| Argument                  | Type |  Description   
+|-------------------------- |---|-------------- 
+| **`-services`**           | List | A list of services to send the message to. 
+| **`-resolver`**           | [resolver](#$cluster-resolver) | See `[$cluster resolver]` for help on available arguments
+| **`-resolve`**            | [resolve](#$cluster-resolve) | See `[$cluster resolve]` for help on available arguments  
+| **`-broadcast`**          | Boolean | A Boolean as-to whether a UDP Multi-Cast should be used
+| **`-protocols`**          | List | A list of protocols that should be attempted 
+| **`-channel`**            | Number | A channel to send the payload to
+| **`-ruid`**               | String | A "Request Unique ID" to send with the payload
+| **`-data`**               | String | Any data that should be sent with the payload
+
+> **Tip:** If using -broadcast but also resolving services, the broadcast will include a filter so that only the given services 
+> will actually read the given payload. In general this type of logic is automatically handled for you.
+ 
+> More Information on each argument coming soon...
 
 ---
 
@@ -314,12 +346,54 @@ dict.
 This allows us to "search" for matching services which meet a specific criteria.  This 
 is used to aid in sending queries and events to the cluster.
 
+```tcl
+# Resolve services by running a search against each $arg to return the 
+# filtered services which match every arg. Resolution is a simple "tag-based"
+# search which matches against a services given tags.
+# set services [$cluster resolve localhost my_service]
+```
+
+> More Information Coming Soon...
+
 ---
 
 #### $cluster resolver
 
 A more advanced version of resolve which allows us to add additional logic to the 
 resolution process.
+
+```tcl
+
+# resolver is a more powerful option than resolve which allows adding of some added logic.
+# Each argument will define which services we want to match against.
+#
+# Additionally, we can specify boolean-type modifiers which will change the behavior.  These
+# are applied IN ORDER so for example if we run -match after -has then has will not use match
+# but any queries after will.
+#
+# Modifiers:
+#  -equal (default)
+#   Items will use equality to test for success
+#  -match 
+#   Items will use string match to test for success
+#  -regexp
+#   Items will use regexp to test for success on each item
+
+# -has [list]
+#   The service must match all items in the list
+# -not [list]
+#   The service must NOT match any of the items given
+# -exact [list]
+#   The service must have every item in the list and no others
+# -some [list]
+#   The service must match at least one item in the list
+#
+# Examples:
+
+set services [ $cluster resolver -match -has [list *wait] -equal -some [list one two three] ]
+
+```
+> More Information Coming Soon...
 
 ---
 
@@ -433,37 +507,7 @@ a heartbeat or communication from it).
 
 #### $service resolver
 
-```tcl
 
-# resolver is a more powerful option than resolve which allows adding of some added logic.
-# Each argument will define which services we want to match against.
-#
-# Additionally, we can specify boolean-type modifiers which will change the behavior.  These
-# are applied IN ORDER so for example if we run -match after -has then has will not use match
-# but any queries after will.
-#
-# Modifiers:
-#  -equal (default)
-#   Items will use equality to test for success
-#  -match 
-#   Items will use string match to test for success
-#  -regexp
-#   Items will use regexp to test for success on each item
-
-# -has [list]
-#   The service must match all items in the list
-# -not [list]
-#   The service must NOT match any of the items given
-# -exact [list]
-#   The service must have every item in the list and no others
-# -some [list]
-#   The service must match at least one item in the list
-#
-# Examples:
-
-set services [ $cluster resolver -match -has [list *wait] -equal -some [list one two three] ]
-
-```
 
 > More Information Coming Soon...
 

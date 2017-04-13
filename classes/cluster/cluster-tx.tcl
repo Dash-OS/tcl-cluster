@@ -61,6 +61,7 @@
 
 # $cluster send \
 #   -resolve   [list] \
+#   -resolver  [list] \
 #   -services  [list] \
 #   -filter    [list] \
 #   -protocols [list] \
@@ -78,7 +79,8 @@
   if { [dict exists $args -resolver] } {
     # Use the advanced resolver to discover the services to send to.
     lappend services {*}[my resolver [dict get $args -resolver]]
-  } elseif { [dict exists $args -resolve] } {
+  }
+  if { [dict exists $args -resolve] } {
     # Resolve the given list. 
     lappend services {*}[my resolve [dict get $args -resolve]]
   }
@@ -90,7 +92,7 @@
   if { [dict exists $args -broadcast] } {
     # 1 / 0 - Indicates if we want to broadcast the message or not.
     # If empty we will try to decide automatically.
-    set broadcast [dict get $args -broadcast] 
+    set broadcast [dict get $args -broadcast]
     if { $broadcast eq {} } { set allow_broadcast 1 }
   } else { 
     # When broadcast is empty we are indicating that we are not yet
@@ -114,7 +116,7 @@
     # best way to send our message based on the number of 
     # services that have been resolved.
     #
-    # Right now we keep it simple - more than 2 we use cluster
+    # Right now we keep it simple - more than 3 we use cluster
     # otherwise we use default.
     #
     # This can be overridden by providing the -broadcast argument
@@ -122,7 +124,7 @@
     # when desired.
     if { [string is true -strict $broadcast] } {
       set protocols c
-    } elseif { $broadcast eq {} && [llength $services] > 2 } {
+    } elseif { $broadcast eq {} && [llength $services] > 3 } {
       set protocols c
       set broadcast 1
     } else {
@@ -158,6 +160,9 @@
     #
     # A filter will be automatically applied when sending directly to 
     # a service otherwise.
+    #
+    # This allows us to use the multicast as a p2p connection to aid in
+    # self healing and protocol negotiation when all else fails.
     set filter [list]
     foreach service $services {
       lappend filter [$service sid]

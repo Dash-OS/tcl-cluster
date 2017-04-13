@@ -315,8 +315,8 @@ will determine from the final list of services what the best method will be to e
 | Argument                  | Type |  Description   
 |-------------------------- |---|-------------- 
 | **`-services`**           | List | A list of services to send the message to. 
-| **`-resolver`**           | [resolver](#$cluster-resolver) | See `[$cluster resolver]` for help on available arguments
-| **`-resolve`**            | [resolve](#$cluster-resolve) | See `[$cluster resolve]` for help on available arguments  
+| **`-resolver`**           | [resolver](#cluster-resolver) | See `[$cluster resolver]` for help on available arguments
+| **`-resolve`**            | [resolve](#cluster-resolve) | See `[$cluster resolve]` for help on available arguments  
 | **`-broadcast`**          | Boolean | A Boolean as-to whether a UDP Multi-Cast should be used
 | **`-protocols`**          | List | A list of protocols that should be attempted 
 | **`-channel`**            | Number | A channel to send the payload to

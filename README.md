@@ -20,6 +20,8 @@ the general behavior of a cluster to fit their security and/or communications ha
 It is actually relatively easy to support other platforms or not require tuapi.  Just need
 to modify a few of the initial procs to give data such as LAN IP's and MAC Address.
 
+> **Note:** All of the platform-specific functionality is implemented in [utils/platform.tcl](https://github.com/Dash-OS/cluster-comm/blob/master/utils/platform.tcl). 
+
 ## Key Concepts
 
 `cluster` aims to provide a lightweight modular framework for cluster discovery, communications, 
@@ -66,6 +68,12 @@ It is extremely easy to provide new protocols that cluster can utilize.  Simply 
 general template provided by the included protocols.  Out of the box we support [UDP](https://sourceforge.net/projects/tcludp/), 
 [TCP](https://www.tcl.tk/man/tcl8.6/TclCmd/socket.htm), and [Unix Sockets](https://sourceforge.net/projects/tcl-unixsockets/).  
 
+#### Protocol Self-Healing
+
+Part of the `cluster` protocol provides capabilities for services to assist each other in 
+self-healing when something goes wrong with one of a services preferred protocol handlers 
+without its knowledge.
+
 ## Simple Service Discovery
 
 Below we see a simple example of using `cluster` where we simply join the cluster
@@ -75,6 +83,7 @@ Running this on two different shells (on the same system for now), you should
 see the two shells discovered each other.  In each example, the `$service` variable 
 is a reference to the service object which can be used to communicate with or get 
 further context about the service.
+
 
 ```tcl
 

@@ -278,7 +278,7 @@ that may be included.
 
 ---
 
-#### $cluster heartbeat_after milliseconds
+#### $cluster heartbeat_after *milliseconds*
 
 Reschedule the heartbeat so that it will occur after the given time.  This is useful
 for when we want to cause a heartbeat to occur sooner than the normal time but dont 

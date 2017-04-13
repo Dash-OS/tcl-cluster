@@ -350,13 +350,13 @@ tags so that we can easily manipulate them if needed.
 
 ##### Tag Modifiers
 
-| Modifier                  |  Description   |
-| -----------------------   | -------------- |
-| **`-map`**                |  Similar to `[string map]`, this will replace a given tag with another if it exists.  |
-| **`-mappend`**            |  Similar to `-map` except that it will add the second tag even if the first does not exist.  It will also only add the new tag if it does not already exist.  |
-| **`-remove`**             |  Removes the given tags if they exist.  |
-| **`-replace`**            |  Replaces the entire list of tags with the given tags then switches back to append for any further arguments given.  |
-| **`-append`**             |  (-lappend is synonymous), adds the given tag to the list of tags. (Default)  |
+| Modifier                  |  Description   
+|--------------------------|-------------- 
+| **`-map`**                |  Similar to `[string map]`, this will replace a given tag with another if it exists.  
+| **`-mappend`**            |  Similar to `-map` except that it will add the second tag even if the first does not exist.  It will also only add the new tag if it does not already exist.
+| **`-remove`**             |  Removes the given tags if they exist.
+| **`-replace`**            |  Replaces the entire list of tags with the given tags then switches back to append for any further arguments given. 
+| **`-append`**             |  (-lappend is synonymous), adds the given tag to the list of tags. (Default)
 
 ```tcl
 

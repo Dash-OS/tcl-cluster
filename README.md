@@ -348,18 +348,32 @@ tags so that we can easily manipulate them if needed.
 
 ##### Tag Arguments
 
- - **`-map`** : Similar to `[string map]`, this will replace a given tag with another if it exists.
- - **`-mappend`** : Similar to `-map` except that it will add the second tag even if the first does not exist.  It will also only add the new tag if it does not already exist.
- - **`-remove`** : Replaces the entire list of tags with the given tags then switches back to append for any further arguments given.
- - **`-append`** : (-lappend is synonymous), adds the given tag to the list of tags.
+| Argument Name  |  Description   |
+| -------------  | -------------- |
+| **`-map`**     |  Similar to `[string map]`, this will replace a given tag with another if it exists.  |
+| **`-mappend`** |  Similar to `-map` except that it will add the second tag even if the first does not exist.  It will also only add the new tag if it does not already exist.  |
+| **`-remove`**  |  Removes the given tags if they exist.  |
+| **`-replace`** |  Replaces the entire list of tags with the given tags then switches back to append for any further arguments given.  |
+| **`-append`**  |  (-lappend is synonymous), adds the given tag to the list of tags. (Default)  |
 
 ```tcl
-$cluster tags -append tag0 tag1 -map [list tag1 tag2] -remove tag2 -append tag3 tag4
-#  tag0 tag3 tag4
+
+$cluster tags tag0 tag1
+#  tag0 tag1
+
+$cluster tags -append tag0 tag2 -map [list tag2 tag3] -remove tag3 -append tag4 tag5
+#  tag0 tag1 tag4 tag5
+
+# In this example the -map does nothing since tag10 does not exist in our list of tags.
+$cluster tags -map [list tag10 tag12]
+#  tag0 tag1 tag4 tag5
 
 $cluster tags -mappend [list tag0 tag5] [list tag6 tag8] [list tag3 tag8]
-#  tag4 tag5 tag8
+#  tag1 tag4 tag5 tag8
+
 ```
+
+> **Tip:** You can think of `[-mappend]` as a shortcut for `[$cluster tags -remove tag1 -append tag2]`
 
 ---
 

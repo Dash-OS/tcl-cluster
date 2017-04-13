@@ -273,9 +273,10 @@
       lappend UPDATED_PROPS tags
     }
   }
-  # For now, we will heartbeat after changing tags so our partners get the
-  # new tags immediately.
-  after 0 [callback my heartbeat]
+  # Reschedule our next heartbeat to occur [after 0].  If multiple changes to
+  # the tags occur in the same thread of execution then we will only trigger 
+  # the heartbeat one time.
+  my heartbeat_after 0
   return $TAGS
 }
 

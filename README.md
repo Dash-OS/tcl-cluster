@@ -339,6 +339,28 @@ When tags are modified, they will be included on the next heartbeat which is sen
 cluster.  Other than that, they are not included unless requested through discovery or 
 direct queries.
 
+Think of tags as a way of determining which members of the cluster are in various states 
+and/or provide various services.
+
+The command itself provides a syntax for modifying the current tags where each argument is 
+taken and handled in the order given.  Modifiers allow us to conduct various operations on the 
+tags so that we can easily manipulate them if needed.
+
+##### Tag Arguments
+
+ - **`-map`** : Similar to `[string map]`, this will replace a given tag with another if it exists.
+ - **`-mappend`** : Similar to `-map` except that it will add the second tag even if the first does not exist.  It will also only add the new tag if it does not already exist.
+ - **`-remove`** : Replaces the entire list of tags with the given tags then switches back to append for any further arguments given.
+ - **`-append`** : (-lappend is synonymous), adds the given tag to the list of tags.
+
+```tcl
+$cluster tags -append tag0 tag1 -map [list tag1 tag2] -remove tag2 -append tag3 tag4
+#  tag0 tag3 tag4
+
+$cluster tags -mappend [list tag0 tag5] [list tag6 tag8] [list tag3 tag8]
+#  tag4 tag5 tag8
+```
+
 ---
 
 #### $cluster services
@@ -394,6 +416,38 @@ a heartbeat or communication from it).
 ---
 
 #### $service resolver
+
+```tcl
+
+# resolver is a more powerful option than resolve which allows adding of some added logic.
+# Each argument will define which services we want to match against.
+#
+# Additionally, we can specify boolean-type modifiers which will change the behavior.  These
+# are applied IN ORDER so for example if we run -match after -has then has will not use match
+# but any queries after will.
+#
+# Modifiers:
+#  -equal (default)
+#   Items will use equality to test for success
+#  -match 
+#   Items will use string match to test for success
+#  -regexp
+#   Items will use regexp to test for success on each item
+
+# -has [list]
+#   The service must match all items in the list
+# -not [list]
+#   The service must NOT match any of the items given
+# -exact [list]
+#   The service must have every item in the list and no others
+# -some [list]
+#   The service must match at least one item in the list
+#
+# Examples:
+
+set services [ $cluster resolver -match -has [list *wait] -equal -some [list one two three] ]
+
+```
 
 > More Information Coming Soon...
 
@@ -479,6 +533,8 @@ or received, or throwing an error to cancel any further handling.
 #### `$cluster hook evaluate receive`
 
 #### `$cluster hook evaluate send`
+
+#### `$cluster hook event`
 
 ### Channel Hooks
 

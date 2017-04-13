@@ -480,8 +480,8 @@ a heartbeat or communication from it).
 
 > There are times this value is reduced.  When we attempt to open a channel with a service and it 
 > fails for any reason, we will dispatch a "ping" request.  This will tell our cluster that we have 
-> failed to communicate with a service.  All services will then expect a heartbeat or they will remove 
-> that service on their next evaluation.
+> failed to communicate with a service.  All services will then expect a heartbeat from the given service 
+> or they will remove that service on their next evaluation (heartbeat).  
 
 ---
 

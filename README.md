@@ -346,6 +346,8 @@ The command itself provides a syntax for modifying the current tags where each a
 taken and handled in the order given.  Modifiers allow us to conduct various operations on the 
 tags so that we can easily manipulate them if needed.
 
+> **Note:** tags are what we are generally using while resolving services during send and query operations.
+
 ##### Tag Modifiers
 
 | Modifier      |  Description   |

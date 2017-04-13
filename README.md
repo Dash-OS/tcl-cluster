@@ -329,7 +329,7 @@ resolution process.
 
 ---
 
-#### $cluster tags *?action ...tags?*
+#### $cluster tags *?modifier ...tags?* *?modifier ...tags?*
 
 When sent without arguments, this will respond with the current tags that have been 
 sent to the members of the cluster.  Otherwise we can use this command to add, remove, 
@@ -346,9 +346,9 @@ The command itself provides a syntax for modifying the current tags where each a
 taken and handled in the order given.  Modifiers allow us to conduct various operations on the 
 tags so that we can easily manipulate them if needed.
 
-##### Tag Arguments
+##### Tag Modifiers
 
-| Argument Name  |  Description   |
+| Modifier      |  Description   |
 | -------------  | -------------- |
 | **`-map`**     |  Similar to `[string map]`, this will replace a given tag with another if it exists.  |
 | **`-mappend`** |  Similar to `-map` except that it will add the second tag even if the first does not exist.  It will also only add the new tag if it does not already exist.  |

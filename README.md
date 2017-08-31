@@ -225,7 +225,7 @@ proc QueryResponse { event } {
 }
 
 proc RunQuery {} {
-  # Query all the services on the localhost, collect the results, run QueryEvent
+  # Query all the services on the localhost, collect the results, run QueryResponse
   # for events, return the value of ::var
   $::cluster query -collect -resolve localhost -command QueryResponse -query { set ::var }   
 }

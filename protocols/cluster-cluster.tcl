@@ -80,7 +80,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 ::oo::define ::cluster::protocol::c method event { event args } {
   switch -- $event {
     refresh {
-      puts "Refresh UDP"
+
     }
     heartbeat {
       # On each heartbeat, each of our protocol handlers receives a heartbeat call.

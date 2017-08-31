@@ -92,7 +92,7 @@
 }
 
 ::oo::define ::cluster::service method ReportFailedAttempts { success_protocol failed_protocols allow_broadcast } {
-  puts "Report Failed : $failed_protocols "
+  #puts "Report Failed : $failed_protocols "
   set payload [$CLUSTER failed_payload [dict create \
     protocols $failed_protocols
   ]]

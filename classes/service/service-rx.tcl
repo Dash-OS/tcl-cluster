@@ -1,7 +1,7 @@
 ::oo::define ::cluster::service method heartbeat { {data {}} } {
   set LAST_HEARTBEAT [clock seconds]
   if { $data ne {} } {
-    puts "Service Props Received! $data"
+    #puts "Service Props Received! $data"
     set PROPS [dict merge $PROPS $data] 
   }
   my variable SERVICE_EXPECTED
@@ -32,7 +32,7 @@
   switch -- $type {
     0 {
       # Disconnect
-      ~ "SERVICE [self] DISCONNECTING"
+      #~ "SERVICE [self] DISCONNECTING"
       [self] destroy
     }
     1 {

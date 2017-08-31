@@ -31,7 +31,7 @@
   } trap NO_SERVICES {result} {
     return
   } on error {result options} {
-    ~ "QUERY CREATION ERROR: $result"
+    #~ "QUERY CREATION ERROR: $result"
     return
   }
   

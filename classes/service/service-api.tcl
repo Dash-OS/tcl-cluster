@@ -15,7 +15,7 @@
     # socket (such as address)
     
     if { [dict get $descriptor address] ne $ADDRESS } {
-      puts "Updating Address! [dict get $descriptor address]"
+      #puts "Updating Address! [dict get $descriptor address]"
       set ADDRESS [dict get $descriptor address]
     }
   }
@@ -43,7 +43,7 @@
     }
     2 {
       # LAN - Need to determine if this is coming from a Local Area Network client
-      puts "TO DO : ADD LAN CHANNEL!"
+      #puts "TO DO : ADD LAN CHANNEL!"
       if { [string is false $LOCAL] } {
         return 0 
       }

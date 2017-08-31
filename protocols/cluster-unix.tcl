@@ -78,7 +78,7 @@ if { [info commands ::cluster::protocol::u] eq {} } {
     }
     return 1
   } on error {r} {
-    puts "UNIX SOCKET FAIL: $r"
+    # Pass 0 to caller
   }
   return 0
 }
@@ -114,7 +114,6 @@ if { [info commands ::cluster::protocol::u] eq {} } {
     }
     refresh {
       # When a failure is reported we will refresh our socket and connection
-      puts "Refreshing UNIX!"
       my CreateServer
     }
     service_lost {
@@ -141,6 +140,7 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 ::oo::define ::cluster::protocol::u method CreateServer { } {
   if { [info exists SOCKET] } { catch { my CloseSocket $SOCKET } }
   if { [file exists $SERVER_PATH] } { file delete -force -- $SERVER_PATH }
+  file mkdir [file dirname $SERVER_PATH]
   set SOCKET [::unix_sockets::listen $SERVER_PATH [namespace code [list my Connect $SERVER_PATH {}]]]
   $CLUSTER event channel server [my proto] $SOCKET
 } 

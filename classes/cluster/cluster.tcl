@@ -73,7 +73,7 @@
 # command space where the protocol will receive [self] $ID $config arguments and should 
 # provide capabilities for both sending and receiving using the protocol.
 ::oo::define ::cluster::cluster method BuildProtocols {} {
-  puts "Build Protocols [dict get $CONFIG protocols]"
+  #puts "Build Protocols [dict get $CONFIG protocols]"
   set PROTOCOLS [dict create]
   namespace eval ${NS}::protocols {}
   foreach protocol [dict get $CONFIG protocols] {
@@ -100,7 +100,7 @@
         if { $lastSeen > [dict get $CONFIG ttl] } { $service destroy }
       } else { $service destroy }
     } on error {result options} {
-      ~ "Service Check Error: $result"
+      #~ "Service Check Error: $result"
       catch { $service destroy }
     }
   }

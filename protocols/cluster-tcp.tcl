@@ -61,7 +61,6 @@ if { [info commands ::cluster::protocol::t] eq {} } {
       # is still operating as expected.
     }
     refresh {
-      puts "Refresh TCP Socket"
       my CreateServer
       $CLUSTER heartbeat
     }
@@ -88,7 +87,6 @@ if { [info commands ::cluster::protocol::t] eq {} } {
     # we can, continue - otherwise open a new connection to the client.
     set sock [$service socket t]
     if { $sock ne {} } {
-      puts "Sending to Previous Socket: $sock"
       try {
         if { [chan eof $sock] } {
           set sock {}
@@ -101,13 +99,12 @@ if { [info commands ::cluster::protocol::t] eq {} } {
       }
     }
     if { $sock eq {} } {
-      puts "Opening Socket"
       set sock [my OpenSocket $service]
       puts -nonewline $sock $packet
     }
     return 1
   } on error {r} {
-    puts "Error Sending to TCP Socket: $r"
+    # Pass 0 to caller
   }
   return 0
 }
@@ -140,7 +137,6 @@ if { [info commands ::cluster::protocol::t] eq {} } {
       $CLUSTER receive [my proto] $chanID $data
     }
   } on error {result options} {
-    puts "tcp error $result"
     ::onError $result $options "Cluster - TCP Receive Error" $chanID
   }
 }
@@ -152,12 +148,10 @@ if { [info commands ::cluster::protocol::t] eq {} } {
 
 ::oo::define ::cluster::protocol::t method OpenSocket { service } {
   set props [$service proto_props t]
-  puts "props $props"
   if { $props eq {} } { throw error "Services TCP Protocol Props are Unknown" }
   if { ! [dict exists $props port] } { throw error "Unknown TCP Port for $service" }
   set address [$service ip]
   set port    [dict get $props port]
-  puts "Connecting to $address | $port"
   set sock    [socket $address $port]
   my Connect $sock $address $port $service
   return $sock

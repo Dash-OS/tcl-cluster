@@ -114,7 +114,6 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
         2 {
           # We are done with a packet -- but another might still be
           # available!
-          puts "ANother Packet!?"
           lappend results $result
           set result [dict create]
         }
@@ -122,12 +121,8 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
     }
     $reader destroy
   } on error {result options} {
-    puts stderr "Malformed Packet! $result"
+    #puts stderr "Malformed Packet! $result"
     catch { $reader destroy }
-  }
-  if { [llength $results] > 1 } {
-    puts "RESULTS"
-    puts $results
   }
   if { $active } { set result {} }
   return $results

@@ -4,7 +4,7 @@
 
 ::oo::define ::cluster::query {
   variable CLUSTER QUERY_ID COMMAND TIMEOUT_ID SERVICES
-  variable SERVICE PAYLOAD PAYLOADS QUERY CHANNEL RESULTS
+  variable SERVICE PAYLOAD PAYLOADS QUERY CHANNEL RESULTS PROPS
 }
 
 ::oo::define ::cluster::query constructor {cluster args} {
@@ -19,13 +19,25 @@
   
   set QUERY_ID [dict get $args -id]
   
-  if { ! [dict exists $args -resolve] } { 
+  if { ! [dict exists $args -resolve] && ! [dict exists $args -resolver] } { 
     throw error "You must provide a -resolve property to your query" 
   }
   
-  set SERVICES [$CLUSTER resolve [dict get $args -resolve]]
+  if { [dict exists $args -resolve] } {
+    lappend SERVICES {*}[$CLUSTER resolve [dict get $args -resolve]]
+  }
+  if { [dict exists $args -resolver] } {
+    lappend SERVICES {*}[$CLUSTER resolver {*}[dict get $args -resolver]] 
+  }
+
   if { $SERVICES eq {} } {
     throw NO_SERVICES "No Services found with [dict get $args -resolve]"
+  }
+  
+  if { [dict exists $args -props] } {
+    set PROPS [dict get $args -props] 
+  } else {
+    set PROPS {}
   }
   
   if { ! [dict exists $args -query] } {
@@ -102,11 +114,16 @@
 ::oo::define ::cluster::query method payloads  {} { return $PAYLOADS }
 ::oo::define ::cluster::query method query     {} { return $QUERY    }
 ::oo::define ::cluster::query method channel   {} { return $CHANNEL  }
+::oo::define ::cluster::query method props     {} { return $PROPS    }
 
 ::oo::define ::cluster::query method results   {} {
   if { [info exists RESULTS] } { return $RESULTS } else {
     throw error "You may only get \"results\" of a cluster query if the -collect argument is specified"
   }
+}
+
+::oo::define ::cluster::query method data {} {
+  tailcall [namespace code [list my result]]
 }
 
 ::oo::define ::cluster::query method result {} {
@@ -130,10 +147,13 @@
   set code [catch { uplevel #0 [list {*}$COMMAND [list $event [self]]] } result]
   switch -- $code {
     0 - 3 - 4 { # OK - BREAK - CONTINUE
-      if { [info exists RESULTS] && [string equal $event response] && $result ne {} } {
+      if { [info exists RESULTS] && $event ni [list done start timeout] } {
         # We are collecting the results that are returned and will have them available
         # as a dict that can be requested throughout the lifecycle.
-        dict set RESULTS $SERVICE $result
+        dict set RESULTS $SERVICE [dict create \
+          event  $event \
+          result $result
+        ]
       }
       if { $code == 3 } {
         if { ! [string equal $event done] } { [self] destroy }

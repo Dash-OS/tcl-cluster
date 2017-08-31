@@ -35,7 +35,7 @@
       # Are we currently listening to the channel that the communication was
       # received on?
       if { [dict get $payload channel] ni $COMM_CHANNELS } {
-        puts "Not In Received Channel"
+        puts "Not In Received Channel [dict get $payload channel] "
         return
       }
       # Called before anything is done with the received payload but after it is
@@ -60,7 +60,7 @@
       $service receive $proto $chanID $payload $descriptor $payloads_remaining
     }
   } on error {result options} {
-    puts $result
+    #puts $result
     ::onError $result $options "While Parsing a Received Cluster Packet" $proto $chanID
   }
 }

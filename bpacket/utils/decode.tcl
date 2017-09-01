@@ -18,7 +18,7 @@
   set field [expr {($i & 120) >> 3}] ; set wire [expr {$i & 7}]
   #puts "Field: $field Wire $wire"
   if {!($i & 128)} { return [list $field $wire] }
-  
+
   # == == == == == == == == == == == == == == == == == == == == == == == == =
   # 'int32':  shift = 4 11 18; # avoid negativ numbers i.e. bit 32.
   binary scan $BUFFER ca* i BUFFER ; set field [expr {((127 & $i) << 4) | $field}]
@@ -30,7 +30,7 @@
   binary scan $BUFFER ca* i BUFFER ; set field [expr {((127 & $i) << 18) | $field}]
   if {!($i & 128)} { return [list $field $wire] }
   # == == == == == == == == == == == == == == == == == == == == == == == == =
-  
+
   binary scan $BUFFER ca* i BUFFER
   if {!($i & 128)} {  ;# (192==128+64):  bits 8, 7 are not set. (positiv int32)
     set x [expr {((127 & $i) << 25) | $field}]
@@ -100,7 +100,7 @@
 
 # get each data piece
 ::oo::define ::bpacket::reader method next {} {
-  if { [string equal [string range $BUFFER 0 1] \x00\x00] } { 
+  if { [string equal [string range $BUFFER 0 1] \x00\x00] } {
     # Is another packet possibly available?
     #puts [string bytelength $BUFFER]
     if { [string bytelength $BUFFER] > 4 } {
@@ -132,10 +132,10 @@
         incr length -1
       }
     }
-    17 - 18 { 
+    17 - 18 {
             # 17 - List - A field of length delimited values prefixed by list length.
-            # 18 - Keyed Dictionary - $varint $value - where $varint is key 
-            #      This works similar to list except it is converted to a 
+            # 18 - Keyed Dictionary - $varint $value - where $varint is key
+            #      This works similar to list except it is converted to a
             #      dictionary on the other end based on the given keys.
       set length [my varint]
       set data   [list]
@@ -144,12 +144,15 @@
         incr length -1
       }
     }
-    19 { # Container - a container simply wraps values in a length-delimited 
+    19 { # Container - a container simply wraps values in a length-delimited
          #             fashion.
     }
-    20 {  # AES Encrypted with pre-shared key
+    20 { # raw - we have raw bytes to read
+      set data [my string]
+    }
+    21 {  # AES Encrypted with pre-shared key
           # TODO: Possibly encrypt the data using a configured
-          #       encryption key.  
+          #       encryption key.
       set data [my string]
     }
     default {

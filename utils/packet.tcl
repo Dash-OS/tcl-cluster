@@ -5,12 +5,16 @@ namespace eval ::cluster::packet {
 
 set ::cluster::packet::encoder [::bpacket::writer new]
 
-# This builds our binary format template.  It is utilized by both the
-# encoding and decoding end to understand how to build and parse our 
-# binary formatting  automatically.
-#
-# asterix items are marked as required, although this is not currently
-# enforced.  
+if 0 {
+  @ bpacket template
+    > Summary
+    | This builds our binary format template.  It is utilized by both the
+    | encoding and decoding end to understand how to build and parse our
+    | binary formatting  automatically.
+    TODO:
+      * asterix items are marked as required, although this is not
+      * currently enforced.
+}
 $::cluster::packet::encoder template {
   * flags  type channel   | 1
   * string hid            | 2
@@ -21,7 +25,7 @@ $::cluster::packet::encoder template {
     string ruid           | 7
     string op             | 8
     string data           | 9
-    aes    encrypted_data | 10
+    aes    raw            | 10
     list   tags           | 11
     bool   keepalive      | 12
     list   filter         | 13
@@ -30,13 +34,13 @@ $::cluster::packet::encoder template {
 
 proc ::cluster::packet::encode { payload } {
   $::cluster::packet::encoder reset
-  
+
   if { [dict exists $payload filter] } {
-    # Filters are always first to be encoded.  This allows us to quickly cancel 
+    # Filters are always first to be encoded.  This allows us to quickly cancel
     # parsing if a service does not match our filter.
     dict set prefix 13 [dict get $payload filter]
   } else { set prefix [dict create] }
-  
+
   set packet_dict [dict merge $prefix [dict create \
     1 [list [dict get $payload type] [dict get $payload channel]] \
     2 [dict get $payload hid] \
@@ -44,25 +48,25 @@ proc ::cluster::packet::encode { payload } {
     5 [clock seconds] \
     6 [dict get $payload protocols]
   ]]
-  if { [dict exists $payload error] } { 
+  if { [dict exists $payload error] } {
     dict set packet_dict 14 [dict get $payload error]
   }
   if { [dict exists $payload flags] } { dict set packet_dict 4 [dict get $payload flags] }
-  if { [dict exists $payload ruid] && [dict get $payload ruid] ne {} } { 
-    dict set packet_dict 7 [dict get $payload ruid] 
+  if { [dict exists $payload ruid] && [dict get $payload ruid] ne {} } {
+    dict set packet_dict 7 [dict get $payload ruid]
   }
-  
-  if { [dict exists $payload op] && [dict get $payload op] ne {} } { 
-    dict set packet_dict 8 [dict get $payload op] 
+
+  if { [dict exists $payload op] && [dict get $payload op] ne {} } {
+    dict set packet_dict 8 [dict get $payload op]
   }
-  if { [dict exists $payload data] && [dict get $payload data] ne {} } { 
-    dict set packet_dict 9 [dict get $payload data] 
+  if { [dict exists $payload data] && [dict get $payload data] ne {} } {
+    dict set packet_dict 9 [dict get $payload data]
   }
-  if { [dict exists $payload encrypted] && [dict get $payload encrypted] ne {} } {
-    dict set packet_dict 10 [dict get $payload encrypted]
+  if { [dict exists $payload raw] && [dict get $payload raw] ne {} } {
+    dict set packet_dict 10 [dict get $payload raw]
   }
   if { [dict exists $payload tags] } { dict set packet_dict 11 [dict get $payload tags] }
-  if { [dict exists $payload keepalive] } { 
+  if { [dict exists $payload keepalive] } {
     dict set packet_dict 12 [dict get $payload keepalive]
   }
   return [$::cluster::packet::encoder build $packet_dict]
@@ -85,7 +89,7 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
         1 {
             # We have more to parse!
             switch -- $id {
-            1  { 
+            1  {
               lassign $data type channel
               dict set result type $type
               dict set result channel $channel
@@ -98,10 +102,10 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
             7  { dict set result ruid $data }
             8  { dict set result op $data }
             9  { dict set result data $data }
-            10 { dict set result encrypted $data }
+            10 { dict set result raw $data }
             11 { dict set result tags $data }
             12 { dict set result keepalive $data }
-            13 { 
+            13 {
               # When we receive a filter we will immediately try to check with the
               # cluster if our service matches and quit decoding immediately if we
               # dont.

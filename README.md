@@ -112,8 +112,8 @@ $cluster hook service discovered {
 
 # Enter the event loop and allow cluster to work
 vwait _forever_
-
 ```
+
 ## Channels / Hooks / Encryption
 
 Channels provide an additional layer of extensibility to your cluster communications.
@@ -128,20 +128,22 @@ on a specific channel.  This way only members which know the encryption key woul
 read it.
 
 All we would need to do is add a hook for the channel we want which would encrypt before sending
-and decrypt before reading.  The encrypted key of a payload tells us to save raw bytes rather than
+and decrypt before reading.  The "raw" key of a payload tells us to save raw bytes rather than
 utf-8 encoded strings.
 
 ```tcl
 $cluster hook channel 5 send {
   if { [dict exists $payload data] } {
-    dict set payload encrypted [encrypt [dict get $payload data]]
+    dict set payload raw [encrypt [dict get $payload data]]
     dict unset payload data
   }
 }
 
 $cluster hook channel 5 receive {
-  dict set payload data [decrypt [dict get $payload encrypted]]
-  dict unset payload encrypted
+  if {[dict exists $data raw]} {
+    dict set payload data [decrypt [dict get $payload raw]]
+    dict unset payload raw
+  }
 }
 ```
 

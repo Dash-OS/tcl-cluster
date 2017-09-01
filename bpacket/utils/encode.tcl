@@ -8,7 +8,8 @@ set ::bpacket::value_types [dict create \
   list      17 \
   dict      18 \
   container 19 \
-  aes       20
+  raw       20 \
+  aes       21
 ]
 
 set ::bpacket::value_ids [dict create \
@@ -19,7 +20,8 @@ set ::bpacket::value_ids [dict create \
   17 list \
   18 dict \
   19 container \
-  20 aes
+  20 raw \
+  21 aes
 ]
 
 ::oo::class create ::bpacket::writer {}
@@ -37,8 +39,8 @@ set ::bpacket::value_ids [dict create \
 # append to the packet
 ::oo::define ::bpacket::writer method append args { append PACKET {*}$args }
 
-::oo::define ::bpacket::writer method set value { 
-  set PACKET $value 
+::oo::define ::bpacket::writer method set value {
+  set PACKET $value
 }
 
 ::oo::define ::bpacket::writer method reset {} {
@@ -60,10 +62,10 @@ set ::bpacket::value_ids [dict create \
 
 # append a binary encoded bool \x00 \x01 to our packet
 ::oo::define ::bpacket::writer method bool { bool } {
-  if { [string is true -strict $bool] } { 
+  if { [string is true -strict $bool] } {
     return [ binary format c 1 ]
   } else {
-    return [ binary format c 0 ] 
+    return [ binary format c 0 ]
   }
 }
 
@@ -75,7 +77,7 @@ set ::bpacket::value_ids [dict create \
       lassign [dict get $map $k] value_type required params
       set field_id $k
     } elseif { [dict exists $schema $k] } {
-      
+
     } else {
       throw error "Encoding Failed: $k is not a known field"
     }
@@ -91,19 +93,19 @@ set ::bpacket::value_ids [dict create \
     if { $line eq {} } { continue }
     lassign [split $line |] params field_id args
     set field_id [string trim $field_id]
-    if { "*" in $params } { 
+    if { "*" in $params } {
       set req 1
       lappend required $field_id
       set params [lsearch -all -inline -not -exact $params "*"]
     } else { set req 0 }
     set keys [lassign $params value_type]
     if { [dict exists $::bpacket::value_types $value_type] } {
-      set value_type [dict get $::bpacket::value_types $value_type] 
+      set value_type [dict get $::bpacket::value_types $value_type]
     }
     set params [list $value_type $req $keys]
-    if { $args ne {} } { 
-      set args [list {*}$args] 
-      lappend params $args  
+    if { $args ne {} } {
+      set args [list {*}$args]
+      lappend params $args
     }
     foreach key $keys {
       dict set schema $key [dict create id $field_id type $value_type]
@@ -176,7 +178,7 @@ set ::bpacket::value_ids [dict create \
         set value [ my uint64 [lindex $args 0] ]
       }
       1 {
-        
+
       }
       2 { # Length-Delimited Data
         set value [ my string [lindex $args 0] ]
@@ -190,22 +192,25 @@ set ::bpacket::value_ids [dict create \
         foreach n $args { lappend values [ my uint64 $n ] }
         set value [join $values {}]
       }
-      17 - 18 { 
+      17 - 18 {
               # 17 - List - A field of values separated by \x00 and prefixed by length
-              # 18 - Keyed Dictionary - $varint $value - where $varint is key 
-              #      This works similar to list except it is converted to a 
+              # 18 - Keyed Dictionary - $varint $value - where $varint is key
+              #      This works similar to list except it is converted to a
               #      dictionary on the other end based on the given keys.
         if { [llength $args] == 1 } { set args [lindex $args 0] }
         set values [ my uint64 [llength $args] ]
         foreach e $args { lappend values [ my string $e ] }
         set value [join $values {}]
       }
-      19 { # Container - a container simply wraps values in a length-delimited 
+      19 { # Container - a container simply wraps values in a length-delimited
            #             fashion.
       }
-      20 { # AES Encrypted with pre-shared key
+      20 { # raw - Simply add the values to the packet
+        set value [ my bytes [lindex $args 0] ]
+      }
+      21 { # AES Encrypted with pre-shared key
           # TODO: Possibly encrypt the data using a configured
-          #       encryption key.  
+          #       encryption key.
         set value [ my bytes [lindex $args 0] ]
       }
     }

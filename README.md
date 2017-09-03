@@ -1,4 +1,4 @@
-# tcl cluster
+# cluster
 
 **UNFINISHED (But Working)**
 
@@ -15,12 +15,13 @@ the general behavior of a cluster to fit their security and/or communications ha
 **Supported Platforms**
 
 - Linux / Unix
-  - Requires [tuapi](http://chiselapp.com/user/rkeene/repository/tuapi/home)
+  - Recommended [tuapi](http://chiselapp.com/user/rkeene/repository/tuapi/home)
+- OS X *Initial Support*
 
-It is actually relatively easy to support other platforms or not require tuapi.  Just need
-to modify a few of the initial procs to give data such as LAN IP's and MAC Address.
+It is actually relatively easy to support other platforms or not require tuapi.  Just need to modify a few of the initial procs to give data such as LAN IP's and MAC Address.
 
-> **Note:** All of the platform-specific functionality is implemented in [utils/platform.tcl](https://github.com/Dash-OS/cluster-comm/blob/master/utils/platform.tcl).
+> **Note:** All of the platform-specific functionality is implemented in [utils/platform.tcl](https://github.com/Dash-OS/cluster-comm/blob/master/utils/platform.tcl).  It should not be difficult to add support for other
+platforms.
 
 ## Key Concepts
 
@@ -86,7 +87,6 @@ further context about the service.
 
 
 ```tcl
-
 package require cluster
 
 set cluster [cluster join -tags [list service_one]]
@@ -101,7 +101,6 @@ vwait _forever_
 ```
 
 ```tcl
-
 package require cluster
 
 set cluster [cluster join -tags [list service_two]]

@@ -95,11 +95,6 @@ variable ::cluster::DEFAULT_CONFIG [dict create \
     | the proc is removed via [rename]
 }
 proc ::cluster::source {} {
-  set utils_directory [file join [file dirname [file normalize [info script]]] utils]
-  foreach file [glob -directory $utils_directory *.tcl] {
-    if {[string match *general.tcl $file]} { continue }
-    uplevel #0 [list source $file]
-  }
   set bpacket_directory [file join [file dirname [file normalize [info script]]] bpacket]
   foreach file [glob -directory $bpacket_directory *.tcl] {
     uplevel #0 [list source $file]
@@ -112,7 +107,11 @@ proc ::cluster::source {} {
   foreach file [glob -directory $protocol_directory *.tcl] {
    uplevel #0 [list source $file]
   }
-
+  set utils_directory [file join [file dirname [file normalize [info script]]] utils]
+  foreach file [glob -directory $utils_directory *.tcl] {
+    if {[string match *general.tcl $file]} { continue }
+    uplevel #0 [list source $file]
+  }
   rename ::cluster::source {}
 }
 

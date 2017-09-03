@@ -6,6 +6,13 @@ namespace eval ::cluster {
   namespace eval protocol {}
 }
 
+::tcl::tm::path add [file join \
+  [file dirname [file normalize [info script]]] tm
+]
+
+package require bpacket
+package require unix
+
 # Source our general utilities first since they
 # are needed for the evaluation below.
 source [file join \
@@ -95,10 +102,6 @@ variable ::cluster::DEFAULT_CONFIG [dict create \
     | the proc is removed via [rename]
 }
 proc ::cluster::source {} {
-  set bpacket_directory [file join [file dirname [file normalize [info script]]] bpacket]
-  foreach file [glob -directory $bpacket_directory *.tcl] {
-    uplevel #0 [list source $file]
-  }
   set classes_directory [file join [file dirname [file normalize [info script]]] classes]
   foreach file [glob -directory $classes_directory *.tcl] {
     uplevel #0 [list source $file]

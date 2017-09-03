@@ -7,13 +7,12 @@ set ::cluster::packet::encoder [::bpacket::writer new]
 
 if 0 {
   @ bpacket template
-    > Summary
     | This builds our binary format template.  It is utilized by both the
     | encoding and decoding end to understand how to build and parse our
     | binary formatting  automatically.
-    TODO:
-      * asterix items are marked as required, although this is not
-      * currently enforced.
+  TODO:
+    * asterix items are marked as required, although this is not
+    * currently enforced.
 }
 $::cluster::packet::encoder template {
   * flags  type channel   | 1

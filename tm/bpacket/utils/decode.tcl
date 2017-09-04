@@ -8,11 +8,15 @@
   my set $packet
 }
 
-::oo::define ::bpacket::reader method reset {} { set BUFFER $PACKET }
+::oo::define ::bpacket::reader method reset {} {
+  set BUFFER $PACKET
+}
+
 ::oo::define ::bpacket::reader method set { packet } {
   set PACKET $packet
   set BUFFER $packet
 }
+
 ::oo::define ::bpacket::reader method field {} {
   binary scan $BUFFER ca* i BUFFER
   set field [expr {($i & 120) >> 3}] ; set wire [expr {$i & 7}]

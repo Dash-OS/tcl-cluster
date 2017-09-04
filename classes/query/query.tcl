@@ -11,72 +11,72 @@
   set CLUSTER  $cluster
 
   if { [dict exists $args -collect] && [dict get $args -collect] } {
-    
+
     # Collect the results of each event and return to the done event
     # We do this if RESULTS exists
     set RESULTS [dict create]
   }
-  
+
   set QUERY_ID [dict get $args -id]
-  
-  if { ! [dict exists $args -resolve] && ! [dict exists $args -resolver] } { 
-    throw error "You must provide a -resolve property to your query" 
+
+  if { ! [dict exists $args -resolve] && ! [dict exists $args -resolver] } {
+    throw CLUSTER_QUERY_NO_RESOLVE "You must provide a -resolve property to your query"
   }
-  
+
   if { [dict exists $args -resolve] } {
     lappend SERVICES {*}[$CLUSTER resolve [dict get $args -resolve]]
   }
   if { [dict exists $args -resolver] } {
-    lappend SERVICES {*}[$CLUSTER resolver {*}[dict get $args -resolver]] 
+    lappend SERVICES {*}[$CLUSTER resolver {*}[dict get $args -resolver]]
   }
 
   if { $SERVICES eq {} } {
-    throw NO_SERVICES "No Services found with [dict get $args -resolve]"
+    throw CLUSTER_QUERY_NO_SERVICES "No Services found with [dict get $args -resolve]"
   }
-  
+
   if { [dict exists $args -props] } {
-    set PROPS [dict get $args -props] 
+    set PROPS [dict get $args -props]
   } else {
     set PROPS {}
   }
-  
+
   if { ! [dict exists $args -query] } {
-    throw NO_QUERY "No Query was provided with the query request"
+    throw CLUSTER_QUERY_NO_QUERY "No Query was provided with the query request"
   } else { set QUERY [dict get $args -query] }
 
   if { ! [dict exists $args -command] } {
-    throw error "You must provide a -command to trigger with any responses"
+    throw CLUSTER_QUERY_NO_COMMAND "You must provide a -command to trigger with any responses"
   } else { set COMMAND [dict get $args -command] }
-  
+
   # Should we broadcast the query using filters?
-  if { [dict exists $args -broadcast] && [dict get $args -broadcast] } { 
+  if { [dict exists $args -broadcast] && [dict get $args -broadcast] } {
     set broadcast 1
     set CHANNEL   0
-  } elseif { [dict exists $args -channel] } { 
+  } elseif { [dict exists $args -channel] } {
     set broadcast 0
     set CHANNEL   [dict get $args -channel]
   } else {
     set broadcast 0
     set CHANNEL   0
   }
-  
+
   if { [dict exists $args -protocols] } {
-    set protocols [dict get $args -protocols] 
+    set protocols [dict get $args -protocols]
   } else { set protocols {} }
-  
+
   # We always have a timeout value included.  This is how long we will keep our
-  # query handler alive before removing it.  Any services which reply after the 
+  # query handler alive before removing it.  Any services which reply after the
   # timeout will be ignored.
   if { ! [dict exists $args -timeout] } {
     set TIMEOUT_ID [after 30000 [namespace code [list my timeout]]]
-  } else { 
+  } else {
     set TIMEOUT_ID [after [dict get $args -timeout] [namespace code [list my timeout]]]
   }
-  
+
   set filter [lmap e $SERVICES { $e sid }]
-  
+
   set payload [$CLUSTER query_payload $QUERY_ID $QUERY $filter $CHANNEL]
-  
+
   if { $broadcast } {
     $CLUSTER broadcast $payload
   } else {
@@ -84,7 +84,7 @@
       set protocol [ $service send $payload $protocols 0 ]
     }
   }
-  
+
   my DispatchEvent start
 }
 
@@ -101,7 +101,7 @@
       dict set PAYLOADS $SERVICE $PAYLOAD
       set SERVICES [lsearch -all -inline -not -exact $SERVICES $SERVICE]
       if { [dict exists $PAYLOAD error] } {
-        my DispatchEvent error 
+        my DispatchEvent error
       } else { my DispatchEvent response }
       if { $SERVICES eq {} } { [self] destroy }
     }
@@ -118,7 +118,7 @@
 
 ::oo::define ::cluster::query method results   {} {
   if { [info exists RESULTS] } { return $RESULTS } else {
-    throw error "You may only get \"results\" of a cluster query if the -collect argument is specified"
+    throw CLUSTER_QUERY_NO_COLLECT "You may only get \"results\" of a cluster query if the -collect argument is specified"
   }
 }
 
@@ -133,7 +133,7 @@
 }
 ::oo::define ::cluster::query method error {} {
   if { [dict exists $PAYLOAD error] } {
-    return [dict get $PAYLOAD error] 
+    return [dict get $PAYLOAD error]
   }
 }
 ::oo::define ::cluster::query method timeout {} {
@@ -163,7 +163,7 @@
       ::onError $result {} "While Parsing Cluster Query Event $event" [self]
     }
     2 { # RETURN
-      
+
     }
   }
 }

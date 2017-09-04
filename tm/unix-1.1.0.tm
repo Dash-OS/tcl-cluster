@@ -7,7 +7,7 @@ package require ensembled
 
 namespace eval unix { ensembled }
 
-% {
+if 0 {
   @ unix platform
     | Simplified platform handling by parsing and returning
     | a simple enumeration based on the os/platform.
@@ -32,7 +32,7 @@ proc ::unix::platform {} {
   }
 }
 
-% {
+if 0 {
   @ unix restart
     | Restart the system using the [shutdown -r now] command
   @arg delay {entier}
@@ -51,7 +51,7 @@ proc ::unix::restart { {delay 5000} } {
   }
 }
 
-% {
+if 0 {
   @ unix get
     | Capture various data from the unix system.  Generally returns
     | raw data that should then be parsed and handled as needed.

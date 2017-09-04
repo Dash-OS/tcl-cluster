@@ -1,9 +1,9 @@
 # Broadcast to the cluster.  This is a shortcut to send to the cluster protocol.
 ::oo::define ::cluster::cluster method broadcast { payload } {
   try {
-    set proto [dict get $PROTOCOLS c] 
+    set proto [dict get $PROTOCOLS c]
     try {my run_hook broadcast} on error {r} { return 0 }
-    try {my run_hook channel [dict get $payload channel] send} on error {r} { return 0 } 
+    try {my run_hook channel [dict get $payload channel] send} on error {r} { return 0 }
     return [ $proto send [::cluster::packet::encode $payload] ]
   } on error {result options} {
     ::onError $result $options "While Broadcasting a Cluster Payload" $payload
@@ -23,7 +23,7 @@
       set props [lsort -unique [concat $UPDATED_PROPS $props]]
       set UPDATED_PROPS [list]
       my CheckServices
-      my CheckProtocols 
+      my CheckProtocols
     }
     if { "tags" in $props } { set tags 1 }
     my broadcast [my heartbeat_payload $props $tags $channel]
@@ -33,7 +33,7 @@
 }
 
 # Reschedule the heartbeat so that it will occur after the given time.  This is useful
-# for when we want to cause a heartbeat to occur sooner than the normal time but dont 
+# for when we want to cause a heartbeat to occur sooner than the normal time but dont
 # want to accidentally dispatch tons of heartbeats when multiple services call it, etc.
 ::oo::define ::cluster::cluster method heartbeat_after { ms } {
   try {
@@ -46,7 +46,7 @@
 
 
 # Send a discovery probe to the cluster.  Each service will send its response
-# based on the best protocol it can find. 
+# based on the best protocol it can find.
 ::oo::define ::cluster::cluster method discover { {ruid {}} {channel 0} } {
   my variable LAST_DISCOVERY
   if { ! [info exists LAST_DISCOVERY] } { set LAST_DISCOVERY [clock seconds] } else {
@@ -81,24 +81,24 @@
     lappend services {*}[my resolver [dict get $args -resolver]]
   }
   if { [dict exists $args -resolve] } {
-    # Resolve the given list. 
+    # Resolve the given list.
     lappend services {*}[my resolve [dict get $args -resolve]]
   }
-  
+
   #puts "Send to services [llength $services]"
   #puts $services
   set allow_broadcast 0
-  
+
   if { [dict exists $args -broadcast] } {
     # 1 / 0 - Indicates if we want to broadcast the message or not.
     # If empty we will try to decide automatically.
     set broadcast [dict get $args -broadcast]
     if { $broadcast eq {} } { set allow_broadcast 1 }
-  } else { 
+  } else {
     # When broadcast is empty we are indicating that we are not yet
     # sure if we want to broadcast the message.
-    set broadcast {} 
-    # When we have not explicitly turned broadcasting off then we 
+    set broadcast {}
+    # When we have not explicitly turned broadcasting off then we
     # will allow it to be used as a last resort if all other protocols
     # fail.  The broadcast will be filtered so only the given service
     # will respond.
@@ -106,14 +106,14 @@
   }
 
   if { ! [string is true -strict $broadcast] } {
-    if { $services eq {} } { return } 
+    if { $services eq {} } { return }
   }
-  
+
   if { [dict exists $args -protocols] } {
     set protocols [dict get $args -protocols]
   } else {
     # If protocols isnt provided - we need to determine the
-    # best way to send our message based on the number of 
+    # best way to send our message based on the number of
     # services that have been resolved.
     #
     # Right now we keep it simple - more than 3 we use cluster
@@ -136,29 +136,29 @@
       set broadcast 0
     }
   }
-  
+
   if { [dict exists $args -channel] } {
-    set channel [dict get $args -channel] 
+    set channel [dict get $args -channel]
   } else { set channel 0 }
-  
+
   if { [dict exists $args -ruid] } {
-    dict set request ruid [dict get $args -ruid] 
+    dict set request ruid [dict get $args -ruid]
   }
-  
+
   if { [dict exists $args -data] } {
-    dict set request data [dict get $args -data] 
+    dict set request data [dict get $args -data]
   }
-  
+
   # Make sure we only have one of each service
   set services [lsort -unique $services]
-  
+
   if { [string is true -strict $broadcast] && $services ne {} } {
     # If we are using the cluster protocol to transmit, we use broadcast
     # to send our payload.  This means that we also need to add a filter
-    # to the request so that only our desired services will handle the 
-    # message being sent.  
+    # to the request so that only our desired services will handle the
+    # message being sent.
     #
-    # A filter will be automatically applied when sending directly to 
+    # A filter will be automatically applied when sending directly to
     # a service otherwise.
     #
     # This allows us to use the multicast as a p2p connection to aid in
@@ -169,9 +169,9 @@
     }
     dict set request filter $filter
   }
-  
+
   set payload [my event_payload $request $channel]
-  
+
   if { [string is true -strict $broadcast] } {
     # We have indicated that we want to broadcast the message.
     my broadcast $payload
@@ -181,12 +181,12 @@
     # as we will attempt to handle it ourselves if required.
     set response [ my send_payload $services $payload $protocols 0 ]
     if { $response eq {} } {
-      # We will receive an empty response when a hook has cancelled the 
+      # We will receive an empty response when a hook has cancelled the
       # transmission
     } else {
       lassign $response success failed
       # puts stderr "Success: $success"
-      
+
       if { $failed ne {} } {
         #puts stderr "Failed:  $failed"
         # If we failed to send to any services we will determine how we should
@@ -194,16 +194,16 @@
         # ::utils::flog "Failed to Send To Cluster Services \n $args \n $failed"
         # ~! "Cluster Warning" "Failed to send to Cluster Services" \
         #   -context "
-        #     Success: 
+        #     Success:
         #     $success
         #     ------------
-        #     Failed: 
+        #     Failed:
         #     $failed
         #   "
       }
     }
   }
-  # Return a resolved list of the services and payload being used.  This way 
+  # Return a resolved list of the services and payload being used.  This way
   # multiple requests can simply call send_payload directly without running
   # through this process.
   return [list $services $payload $protocols]
@@ -211,6 +211,7 @@
 
 ::oo::define ::cluster::cluster method send_payload { services payload protocols {allow_broadcast 0} } {
   set success [dict create] ; set failed [dict create]
+
   try {my run_hook channel [dict get $payload channel] send} on error { r } { return }
   foreach service $services {
     try {

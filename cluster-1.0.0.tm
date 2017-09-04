@@ -11,7 +11,7 @@ namespace eval ::cluster {
 ]
 
 package require bpacket
-package require unix
+package require unix 1.1
 
 # Source our general utilities first since they
 # are needed for the evaluation below.
@@ -19,7 +19,7 @@ source [file join \
   [file dirname [file normalize [info script]]] utils general.tcl
 ]
 
-% {
+if 0 {
   @type ClusterCommunicationProtocol {mixed}
     | A ClusterCommunicationProtocol is any of the supported
     | protocols as provided within the [protocols] folder.
@@ -54,34 +54,34 @@ source [file join \
       do not leave the local system.
 }
 
-% {
+if 0 {
   @ ::cluster::cluster @ {class}
     | $::cluster::cluster instances are created for each cluster that
     | is joined.
 }
 ::oo::class create ::cluster::cluster {}
 
-% {
+if 0 {
   @ ::cluster::services @ {class}
     | Each discovered service (member of a cluster) will be
     | an instance of our $::cluster::services class.
 }
 ::oo::class create ::cluster::service {}
 
-% {
+if 0 {
   @ $::cluster::addresses {?list<IP>?}
    | Used to store our systems local IP Addresses.  Primed by
    | calling [::cluster::local_addresses]
 }
 variable ::cluster::addresses [list]
 
-% {
+if 0 {
   @ $::cluster::i @ {entier}
     | A counter value used to generate unique session values
 }
 variable ::cluster::i 0
 
-% {
+if 0 {
   @ $::cluster::DEFAULT_CONFIG @ {ClusterCommConfiguration}
 }
 variable ::cluster::DEFAULT_CONFIG [dict create \
@@ -91,11 +91,11 @@ variable ::cluster::DEFAULT_CONFIG [dict create \
   heartbeat   [::cluster::rand 110000 140000] \
   protocols   [list t c] \
   channels    [list] \
-  remote      false \
+  remote      0 \
   tags        [list]
 ]
 
-% {
+if 0 {
   @ ::cluster::source
     | Called when cluster is required.  It will source all the
     | necessary scripts in our sub-directories.  Once completed,
@@ -113,12 +113,13 @@ proc ::cluster::source {} {
   set utils_directory [file join [file dirname [file normalize [info script]]] utils]
   foreach file [glob -directory $utils_directory *.tcl] {
     if {[string match *general.tcl $file]} { continue }
+    puts $file
     uplevel #0 [list source $file]
   }
   rename ::cluster::source {}
 }
 
-% {
+if 0 {
   @type ClusterCommConfiguration {dict}
     | Our default configuration for the cluster.  This
     | dict also represents the configuration options
@@ -164,7 +165,7 @@ proc ::cluster::join args {
   dict for { k v } $args {
     set k [string trimleft $k -]
     if { ! [dict exists $config $k] && $k ni $protocols } {
-      throw error "Invalid Cluster Config Key: ${k}, should be one of [dict keys $config]"
+      throw CLUSTER_INVALID_ARGS "Invalid Cluster Config Key: ${k}, should be one of [dict keys $config]"
     }
     if { [string equal $k protocols] } {
       # cluster protocol is required, add if defined without it

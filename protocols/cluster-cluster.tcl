@@ -1,8 +1,8 @@
 # This example shows the (t) (TCP) protocol handler for the cluster-comm package.
 # A protocol is a class which provides a translation of a protocol so that we can
-# communicate successfully with it with cluster-comm. 
+# communicate successfully with it with cluster-comm.
 #
-# A protocol must generally define both a SERVER and a CLIENT handler.  For our 
+# A protocol must generally define both a SERVER and a CLIENT handler.  For our
 # server, we expect to listen to connections from clients and pass them to our
 # cluster so it can be properly handled.
 
@@ -30,13 +30,13 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 ::oo::define ::cluster::protocol::c method proto {} { return c }
 
 # The props that are required to successfully negotiate with the protocol.
-# These are sent to the members of the cluster so that they can understand 
+# These are sent to the members of the cluster so that they can understand
 # what steps should be taken to establish a communications channel when using
 # this protocol.
 ::oo::define ::cluster::protocol::c method props {} {}
 
 # When we want to send data to this protocol we will call this with the
-# service that we are wanting to send the payload to. We should return 
+# service that we are wanting to send the payload to. We should return
 # 1 or 0 to indicate success of failure.
 ::oo::define ::cluster::protocol::c method send { packet {service {}} } {
   try {
@@ -62,9 +62,9 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # Cluster ignores any close requests due to no keep alive.
 ::oo::define ::cluster::protocol::c method done { service chanID keepalive {response {}} } {}
 
-# A service descriptor is used to define a protocols properties and to aid in 
-# securing the protocol and understanding how we need to negotiate with it.  
-# Every descriptor is expected to provide an "address" key.  Other than that it 
+# A service descriptor is used to define a protocols properties and to aid in
+# securing the protocol and understanding how we need to negotiate with it.
+# Every descriptor is expected to provide an "address" key.  Other than that it
 # may define "port", "local" (is it a local-only protocol), etc.  They are available
 # to hooks at various points.
 ::oo::define ::cluster::protocol::c method descriptor { chanID } {
@@ -86,7 +86,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
       # On each heartbeat, each of our protocol handlers receives a heartbeat call.
       # This allows the service to run any commands that it needs to insure that it
       # is still operating as expected.
-      
+
     }
     service_lost {
       # When a service is lost, each protocol is informed in case it needs to do cleanup
@@ -96,7 +96,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 }
 
 
-## Below are methods that are either specific to the protocol or that are 
+## Below are methods that are either specific to the protocol or that are
 ## not required by the cluster.
 
 
@@ -110,19 +110,20 @@ if { [info commands ::cluster::protocol::c] eq {} } {
   }
   set SOCKET [udp_open $port reuse]
   set PORT   $port
+  puts "ttl [expr { [string is false -strict $remote] ? 0 : $remote }]"
   chan configure $SOCKET  \
     -buffering   full     \
     -blocking    0        \
     -translation binary   \
     -mcastadd    $address \
     -remote      [list $address $port] \
-    -ttl         $remote
+    -ttl         [expr { [string is false -strict $remote] ? 0 : $remote }]
   chan event $SOCKET readable [namespace code [list my Receive]]
-} 
+}
 
-# When we receive data from the cluster, we handle it the same way as-if we 
+# When we receive data from the cluster, we handle it the same way as-if we
 # receive from any other protocol.  Since we can call [chan configure $chan -peer]
-# we can still apply our Security Policies against it if required.  
+# we can still apply our Security Policies against it if required.
 ::oo::define ::cluster::protocol::c method Receive {} {
   if { [chan eof $SOCKET] } {
     catch { chan close $SOCKET }

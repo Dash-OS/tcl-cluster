@@ -1,6 +1,6 @@
 namespace eval ::cluster {}
 
-% {
+if 0 {
   @type > NetworkInterface {entier|string}
     | Either an interface number or interface name
     @entier
@@ -15,7 +15,7 @@ namespace eval ::cluster {}
     | cluster utilities.
 }
 
-% {
+if 0 {
   > Platform Dependencies Inclusion
     | Any dependencies based on the platform should be included here.
   TODO:
@@ -25,7 +25,7 @@ switch -- $::tcl_platform(platform) {
   unix { package require unix }
 }
 
-% {
+if 0 {
   @ ::cluster::platform @
   @returns {SystemPlatform}
 }
@@ -38,7 +38,7 @@ proc ::cluster::platform {} {
   }
 }
 
-% {
+if 0 {
   @ ::cluster::getInterface @
     | Internal utility used to parse a received "iface" argument
     | and return a valid interface in response.
@@ -65,7 +65,7 @@ proc ::cluster::getInterface {platform {iface {}}} {
 }
 
 
-% {
+if 0 {
   @ ::cluster::hwaddr @
     | Retrieve the hardware address for the platform.  Currently only
     | handling unix platform.
@@ -85,7 +85,7 @@ proc ::cluster::hwaddr {{iface {}}} {
 }
 
 
-% {
+if 0 {
   @ ::cluster::lanip @
     | Retrieve the most likely lanip for the platform.  Not currently
     | handling if multiple lan ip's are utilized, we return the first
@@ -146,7 +146,7 @@ proc ::cluster::lanip {{iface {}}} {
   return $ip
 }
 
-% {
+if 0 {
   @ ::cluster::islocal @
     | Check a {peer} value to see if it is from a local source or not.
   @returns {boolean}
@@ -160,7 +160,7 @@ proc ::cluster::islocal { descriptor } {
   return false
 }
 
-% {
+if 0 {
   @ ::cluster::local_addresses @
     | Capture the LAN IP's of the system which will be used to
     | help determine if a given service is local to the system.
@@ -189,8 +189,8 @@ proc ::cluster::local_addresses {{force false}} {
         # attempt to capture using shell commands
         set addresses [split \
           [string map {"addr:" ""} \
-            [exec -ignorestderr -- ifconfig | grep -e "inet " | awk "{print \$2}"]
-          ]
+            [exec -ignorestderr -- ifconfig | grep -e "inet " | awk "{print \$2}"] \
+          ] \
         "\n"]
       }
     }

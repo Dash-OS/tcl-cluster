@@ -5,15 +5,7 @@ if { [info commands ::onError] eq {} } {
   proc ::onError { result options args } {}
 }
 
-if {[info commands %] eq {}} {
-  # [%] is unfortunately required to be provided this way.  While
-  # this may cause side effects until the pre-processor is finished,
-  # it is used as a standard for inline documentation throughout
-  # Dash Packages.
-  proc % args {}
-}
-
-% {
+if 0 {
   @ ::cluster::rand @
     | Generate a "random" number within the given range
   @arg min {entier} | minimum value

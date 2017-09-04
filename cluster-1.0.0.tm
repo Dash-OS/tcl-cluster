@@ -7,16 +7,16 @@ namespace eval ::cluster {
 }
 
 ::tcl::tm::path add [file join \
-  [file dirname [file normalize [info script]]] tm
+  [file dirname [file normalize [info script]]] tcl-modules
 ]
 
 package require bpacket
-package require unix 1.1
+package require unix 1.1 ; # Need this for initial OSX Support
 
 # Source our general utilities first since they
 # are needed for the evaluation below.
 source [file join \
-  [file dirname [file normalize [info script]]] utils general.tcl
+  [file dirname [file normalize [info script]]] cluster utils general.tcl
 ]
 
 if 0 {
@@ -102,18 +102,18 @@ if 0 {
     | the proc is removed via [rename]
 }
 proc ::cluster::source {} {
-  set classes_directory [file join [file dirname [file normalize [info script]]] classes]
+  set script_dir [file dirname [file normalize [info script]]]
+  set classes_directory [file join $script_dir cluster classes]
   foreach file [glob -directory $classes_directory *.tcl] {
     uplevel #0 [list source $file]
   }
-  set protocol_directory [file join [file dirname [file normalize [info script]]] protocols]
+  set protocol_directory [file join $script_dir cluster protocols]
   foreach file [glob -directory $protocol_directory *.tcl] {
    uplevel #0 [list source $file]
   }
-  set utils_directory [file join [file dirname [file normalize [info script]]] utils]
+  set utils_directory [file join [file dirname $script_dir cluster utils]
   foreach file [glob -directory $utils_directory *.tcl] {
     if {[string match *general.tcl $file]} { continue }
-    puts $file
     uplevel #0 [list source $file]
   }
   rename ::cluster::source {}

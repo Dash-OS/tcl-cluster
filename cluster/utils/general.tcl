@@ -2,7 +2,11 @@ if { [info commands ::onError] eq {} } {
   # Our Error Handler is called throughout.  If not defined, we define it
   # here.
   # TODO: Provide official way to handle the logging / errors.
-  proc ::onError { result options args } {}
+  proc ::onError { result options args } {
+    puts "Error Occurred!"
+    puts $result
+    puts $options
+  }
 }
 
 if 0 {

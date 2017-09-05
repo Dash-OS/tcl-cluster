@@ -3,12 +3,23 @@ namespace eval ::cluster {
   namespace export {[a-z]*}
 
   namespace eval cluster  {}
-  namespace eval protocol {}
+  namespace eval protocol {}  
 }
 
-::tcl::tm::path add [file join \
-  [file dirname [file normalize [info script]]] tcl-modules
+variable ::cluster::script_dir [file dirname \
+  [file normalize [info script]]
 ]
+
+if 0 {
+  | When tcl-modules is already added, we do not need to add
+  | the tcl-modules to our path.  This is included so that
+  | those that use the repo directly rather than as a tcl-module
+  | can still require and use the package with the included
+  | tcl-modules folder in the repo.
+}
+if {![string match $script_dir [::tcl::tm::path list]]} {
+  ::tcl::tm::path add [file join $script_dir tcl-modules]
+}
 
 package require bpacket
 package require unix 1.1 ; # Need this for initial OSX Support
@@ -16,7 +27,7 @@ package require unix 1.1 ; # Need this for initial OSX Support
 # Source our general utilities first since they
 # are needed for the evaluation below.
 source [file join \
-  [file dirname [file normalize [info script]]] cluster utils general.tcl
+  $::cluster::script_dir cluster utils general.tcl
 ]
 
 if 0 {

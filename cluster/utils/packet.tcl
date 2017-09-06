@@ -1,3 +1,5 @@
+package require bpacket;
+
 namespace eval ::cluster {}
 namespace eval ::cluster::packet {
   variable total_encoded 0

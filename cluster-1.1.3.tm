@@ -23,6 +23,7 @@ if {$::cluster::script_dir ni [::tcl::tm::path list]} {
 
 package require bpacket
 package require unix 1.1 ; # Need this for initial OSX Support
+package require shortid
 
 # Source our general utilities first since they
 # are needed for the evaluation below.
@@ -121,7 +122,7 @@ proc ::cluster::source {} {
   foreach file [glob -directory $protocol_directory *.tcl] {
    uplevel #0 [list source $file]
   }
-  set utils_directory [file join [file dirname $::cluster::script_dir cluster utils]
+  set utils_directory [file join $::cluster::script_dir cluster utils]
   foreach file [glob -directory $utils_directory *.tcl] {
     if {[string match *general.tcl $file]} { continue }
     uplevel #0 [list source $file]

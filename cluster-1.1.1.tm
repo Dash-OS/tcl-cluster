@@ -3,7 +3,7 @@ namespace eval ::cluster {
   namespace export {[a-z]*}
 
   namespace eval cluster  {}
-  namespace eval protocol {}  
+  namespace eval protocol {}
 }
 
 variable ::cluster::script_dir [file dirname \
@@ -17,8 +17,8 @@ if 0 {
   | can still require and use the package with the included
   | tcl-modules folder in the repo.
 }
-if {![string match $script_dir [::tcl::tm::path list]]} {
-  ::tcl::tm::path add [file join $script_dir tcl-modules]
+if {![string match $::cluster::script_dir [::tcl::tm::path list]]} {
+  ::tcl::tm::path add [file join $::cluster::script_dir tcl-modules]
 }
 
 package require bpacket
@@ -113,16 +113,15 @@ if 0 {
     | the proc is removed via [rename]
 }
 proc ::cluster::source {} {
-  set script_dir [file dirname [file normalize [info script]]]
-  set classes_directory [file join $script_dir cluster classes]
+  set classes_directory [file join $::cluster::script_dir cluster classes]
   foreach file [glob -directory $classes_directory *.tcl] {
     uplevel #0 [list source $file]
   }
-  set protocol_directory [file join $script_dir cluster protocols]
+  set protocol_directory [file join $::cluster::script_dir cluster protocols]
   foreach file [glob -directory $protocol_directory *.tcl] {
    uplevel #0 [list source $file]
   }
-  set utils_directory [file join [file dirname $script_dir cluster utils]
+  set utils_directory [file join [file dirname $::cluster::script_dir cluster utils]
   foreach file [glob -directory $utils_directory *.tcl] {
     if {[string match *general.tcl $file]} { continue }
     uplevel #0 [list source $file]

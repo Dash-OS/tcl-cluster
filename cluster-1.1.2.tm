@@ -17,8 +17,8 @@ if 0 {
   | can still require and use the package with the included
   | tcl-modules folder in the repo.
 }
-if {![string match $::cluster::script_dir [::tcl::tm::path list]]} {
-  ::tcl::tm::path add [file join $::cluster::script_dir tcl-modules]
+if {$::cluster::script_dir ni [::tcl::tm::path list]} {
+  catch { ::tcl::tm::path add [file join $::cluster::script_dir tcl-modules] }
 }
 
 package require bpacket

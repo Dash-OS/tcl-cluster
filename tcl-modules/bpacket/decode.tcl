@@ -4,6 +4,7 @@
 ::oo::define ::bpacket::reader {
   variable PACKET BUFFER
 }
+
 ::oo::define ::bpacket::reader constructor packet {
   my set $packet
 }

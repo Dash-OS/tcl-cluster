@@ -109,10 +109,14 @@ proc ::cluster::lanip {{iface {}}} {
         if {$ip eq {}} {
           if {$iface ne "en0"} {
             # if fail, default to en0 on osx
-            catch { set ip [exec -ignorestderr -- ipconfig getifaddr en0] }
+            catch {
+              set ip [exec -ignorestderr -- ipconfig getifaddr en0]
+            }
           }
           if {$ip eq {}} {
-            catch { set ip [exec -ignorestderr -- ipconfig getifaddr en1] }
+            catch {
+              set ip [exec -ignorestderr -- ipconfig getifaddr en1]
+            }
           }
         }
       }
@@ -155,9 +159,14 @@ proc ::cluster::islocal { descriptor } {
   if { [dict exists $descriptor address] } {
     set address [dict get $descriptor address]
   } else { return false }
-  if { $address eq "127.0.0.1" } { return true }
-  if { $address in [local_addresses] } { return true }
-  return false
+  if {
+       $address in [local_addresses]
+    || $address eq "127.0.0.1"
+  } {
+    return true
+  } else {
+    return false
+  }
 }
 
 if 0 {
@@ -182,7 +191,9 @@ proc ::cluster::local_addresses {{force false}} {
         dict for { iface params } [::tuapi::ifconfig] {
           if { [dict exists $params address] } {
             set address [dict get $params address]
-            if { $address ni $addresses } { lappend addresses $address }
+            if { $address ni $addresses } {
+              lappend addresses $address
+            }
           }
         }
       } else {

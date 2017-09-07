@@ -16,8 +16,8 @@
 }
 
 ::oo::define ::cluster::cluster method is_local { address } {
-  if { $address in [::cluster::local_addresses] || [string equal $address localhost] } { 
-    return 1 
+  if { $address in [::cluster::local_addresses] || [string equal $address localhost] } {
+    return 1
   } else { return 0 }
 }
 
@@ -27,7 +27,7 @@
 ::oo::define ::cluster::cluster method hid {} { return $SYSTEM_ID  }
 ::oo::define ::cluster::cluster method sid {} { return $SERVICE_ID }
 # Retrieve how long a service should be cached by the protocol.  If we do not
-# hear from a given service for longer than the $ttl value, the service will be 
+# hear from a given service for longer than the $ttl value, the service will be
 # removed from our cache.
 ::oo::define ::cluster::cluster method ttl  {} { return [dict get $CONFIG ttl] }
 
@@ -35,7 +35,7 @@
 
 ::oo::define ::cluster::cluster method protocol { protocol } {
   if { [dict exists $PROTOCOLS $protocol] } {
-    return [dict get $PROTOCOLS $protocol] 
+    return [dict get $PROTOCOLS $protocol]
   }
 }
 
@@ -61,11 +61,11 @@
   return [dict get $CONFIG {*}$args]
 }
 
-::oo::define ::cluster::cluster method flags {} { 
-  return [ list [my known_services] 0 0 0 ] 
+::oo::define ::cluster::cluster method flags {} {
+  return [ list [my known_services] 0 0 0 ]
 }
 
-# Resolve services by running a search against each $arg to return the 
+# Resolve services by running a search against each $arg to return the
 # filtered services which match every arg. Resolution is a simple "tag-based"
 # search which matches against a services given tags.
 # set services [$cluster resolve localhost my_service]
@@ -73,8 +73,8 @@
   set services [my services]
   foreach filter [concat $filters $args] {
     if { $services eq {} } { break }
-    set services [lmap e $services { 
-      if { 
+    set services [lmap e $services {
+      if {
         ( [string match "::*" $filter] && [info commands $filter] ne {} )
         || [ string is true -strict [ $e resolve $filter ] ]
       } { set e } else { continue }
@@ -93,7 +93,7 @@
 # Modifiers:
 #  -equal (default)
 #   Items will use equality to test for success
-#  -match 
+#  -match
 #   Items will use string match to test for success
 #  -regexp
 #   Items will use regexp to test for success on each item
@@ -152,13 +152,13 @@
 # Resolve ourselves
 ::oo::define ::cluster::cluster method resolve_self { tag {modifier equal} } {
   switch -- $modifier {
-    equal { 
+    equal {
       if { $tag in $TAGS } { return 1 }
       if { [string equal $tag $SERVICE_ID] } { return 1 }
-      if { [string equal $tag $SYSTEM_ID]  } { return 1 } 
+      if { [string equal $tag $SYSTEM_ID]  } { return 1 }
       if { [my is_local $tag] } { return 1 }
     }
-    match { 
+    match {
       foreach _tag $TAGS { if { [string match $tag ${_tag}] } { return 1 } }
       if { [string match $tag $SERVICE_ID] } { return 1 }
       if { [string match $tag $SYSTEM_ID]  } { return 1 }
@@ -193,22 +193,22 @@
     switch -- $opt {
       all - has {
         # Must match every tag
-        foreach tag $filter { 
-          if { ! [my resolve_self $tag $modifier] } { return 0 } 
+        foreach tag $filter {
+          if { ! [my resolve_self $tag $modifier] } { return 0 }
         }
         return 1
       }
       not {
         # Must not match any of the tags
-        foreach tag $filter { 
-          if { [my resolve_self $tag $modifier] } { return 0 } 
+        foreach tag $filter {
+          if { [my resolve_self $tag $modifier] } { return 0 }
         }
         return 1
       }
       some {
         # Must have at least one $what
-        foreach tag $filter { 
-          if { [my resolve_self $tag $modifier] } { return 1 } 
+        foreach tag $filter {
+          if { [my resolve_self $tag $modifier] } { return 1 }
         }
       }
     }
@@ -274,7 +274,7 @@
     }
   }
   # Reschedule our next heartbeat to occur [after 0].  If multiple changes to
-  # the tags occur in the same thread of execution then we will only trigger 
+  # the tags occur in the same thread of execution then we will only trigger
   # the heartbeat one time.
   my heartbeat_after 0
   return $TAGS
@@ -291,7 +291,9 @@
     }
     unsubscribe - exit - leave - remove {
       foreach channel $channels {
-        if { $channel in [list 0 1 2] } { throw error "You may not leave the default channels 0-2" }
+        if { $channel in [list 0 1 2] } {
+          throw error "You may not leave the default channels 0-2"
+        }
         if { $channel in $COMM_CHANNELS } {
           set COMM_CHANNELS [lsearch -all -inline -not -exact $COMM_CHANNELS $channel]
         }

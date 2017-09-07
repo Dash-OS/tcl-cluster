@@ -16,7 +16,7 @@
         proto    $proto \
         created  [clock seconds]
       ]
-      if { $service ne {} } { 
+      if { $service ne {} } {
         dict set CHANNELS $chanID service $service
         $service event channel open $proto $chanID
       }
@@ -25,8 +25,10 @@
       if { [dict exists $CHANNELS $chanID service] } {
         set service [dict get $CHANNELS $chanID service]
       }
-      if { $service ne {} } { 
-        catch { $service event channel close $proto $chanID } 
+      if {$service ne {}} {
+        catch {
+          $service event channel close $proto $chanID
+        }
       }
       dict unset CHANNELS $chanID
     }
@@ -54,7 +56,10 @@
       foreach protocol [$service protocols] {
         if { [dict exists $PROTOCOLS $protocol] } {
           # We dont care if it causes an error, we move on.
-          catch { [dict get $PROTOCOLS $protocol] event service_lost $service }
+          catch {
+            set proto [dict get $PROTOCOLS $protocol]
+            $proto event service_lost $service
+          }
         }
       }
     }

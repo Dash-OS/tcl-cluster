@@ -10,13 +10,15 @@
   set ID       $id
   set QUERIES  [dict create]
   set HOOKS    [dict create]
+  set CHANNELS [dict create]
   set TAGS     [dict get $config tags]
   dict unset config tags
   set CONFIG   $config
   set NS       ::cluster::clusters::${ID}
   set AFTER_ID {}
-  set CHANNELS [dict create]
-  set COMM_CHANNELS [lsort -unique -real [list 0 1 2 {*}[dict get $config channels]]]
+  set COMM_CHANNELS [lsort -unique -real \
+    [list 0 1 2 {*}[dict get $config channels]]
+  ]
   namespace eval $NS {}
   namespace eval ${NS}::services {}
   namespace eval ${NS}::queries  {}
@@ -30,16 +32,21 @@
 # We need to destroy our various objects in the appropriate order so they have
 # access to the pieces they may need to clean themselves up.
 ::oo::define ::cluster::cluster destructor {
+  catch {
+    # attempt a graceful disconnect by broadcasting a
+    # disconnect payload
+    my broadcast [disconnect_payload]
+  }
   my variable SERVICES_TO_PING
   my variable SERVICE_CHECK_ID
-  if { [info exists SERVICES_TO_PING] } {
+  if {[info exists SERVICES_TO_PING]} {
     # Cancel our ping request
-    if { [dict exists $SERVICES_TO_PING after_id] } {
-      after cancel [dict get $SERVICES_TO_PING after_id] 
+    if {[dict exists $SERVICES_TO_PING after_id]} {
+      after cancel [dict get $SERVICES_TO_PING after_id]
     }
   }
-  if { [info exists SERVICE_CHECK_ID] } {
-    after cancel $SERVICE_CHECK_ID 
+  if {[info exists SERVICE_CHECK_ID]} {
+    after cancel $SERVICE_CHECK_ID
   }
   after cancel $AFTER_ID
   if { [namespace exists ${NS}::services] } {
@@ -52,7 +59,7 @@
   }
   if { [namespace exists ${NS}::queries] } {
     # Delete the namespace holding our query objects
-    namespace delete ${NS}::queries 
+    namespace delete ${NS}::queries
   }
   # Delete our entire namespace
   namespace delete ${NS}
@@ -70,7 +77,7 @@
 # supported by a cluster as well.
 #
 # We expect any supported protocols to be classes defined in the ::cluster::protocol::$protocol
-# command space where the protocol will receive [self] $ID $config arguments and should 
+# command space where the protocol will receive [self] $ID $config arguments and should
 # provide capabilities for both sending and receiving using the protocol.
 ::oo::define ::cluster::cluster method BuildProtocols {} {
   #puts "Build Protocols [dict get $CONFIG protocols]"
@@ -84,7 +91,6 @@
         ]
     } else {
       # If we do not know the given protocol, raise an error
-      puts fail
       throw error "Unknown Cluster Protocol Requested: $protocol"
     }
   }
@@ -95,7 +101,7 @@
   foreach service [my services] {
     try {
       set info [$service info]
-      if { [dict exists $info last_seen] } { 
+      if { [dict exists $info last_seen] } {
         set lastSeen [dict get $info last_seen]
         if { $lastSeen > [dict get $CONFIG ttl] } { $service destroy }
       } else { $service destroy }
@@ -116,25 +122,32 @@
 ::oo::define ::cluster::cluster method ScheduleServiceCheck { {ms 30000} {force 0} } {
   my variable SERVICE_CHECK_ID
   # Only schedule one if we havent done-so already or if force is provided
-  if { [info exists SERVICE_CHECK_ID] && [string is false -strict $force] } { return } else {
+  if { [info exists SERVICE_CHECK_ID] && [string is false -strict $force] } {
+    return
+  } else {
     # If force is provided, cancel the previous check before we schedule the next one.
-    if { [info exists SERVICE_CHECK_ID] } { after cancel $SERVICE_CHECK_ID }
-    set SERVICE_CHECK_ID [ after $ms [namespace code [list my CheckServices 1]] ]
+    if {[info exists SERVICE_CHECK_ID]} {
+      after cancel $SERVICE_CHECK_ID
+    }
+    set SERVICE_CHECK_ID [after $ms [namespace code [list my CheckServices 1]]]
   }
 }
 
 ::oo::define ::cluster::cluster method CheckProtocols {} {
-  dict for { protocol proto } $PROTOCOLS { catch { $proto event heartbeat } }
+  dict for { protocol proto } $PROTOCOLS {
+    catch {
+      $proto event heartbeat
+    }
+  }
 }
 
 # Gather the public properties of each protocol that we support.
 ::oo::define ::cluster::cluster method ProtoProps { {pdict {}} } {
   dict for { protocol ref } $PROTOCOLS {
     set props [$ref props]
-    if { $props ne {} } { dict set pdict $protocol $props }
+    if { $props ne {} } {
+      dict set pdict $protocol $props
+    }
   }
   return $pdict
 }
-
-
-

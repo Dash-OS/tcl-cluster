@@ -17,8 +17,10 @@
       event           { set type 6 }
       flush*          { set type 7 }
       fail*           { set type 8 }
-      default { throw error "Unknown Type: $type" }
-    } 
+      default {
+        throw error "Unknown Type: $type"
+      }
+    }
   }
   return $type
 }
@@ -29,7 +31,9 @@
       broadcast - br* { set type 0 }
       system    - sy* { set type 1 }
       lan - lo* - la* { set type 2 }
-      default { throw error "Unknown Channel: $channel" }
+      default {
+        throw error "Unknown Channel: $channel"
+      }
     }
   }
   return $channel
@@ -42,7 +46,7 @@
     hid       $SYSTEM_ID \
     sid       $SERVICE_ID \
     protocols [my protocols]
-  ] $payload ]
+  ] $payload]
   if { $flags } { dict set payload flags [my flags] }
   if { $tags  } { dict set payload tags $TAGS }
   return $payload
@@ -63,6 +67,10 @@
   return [ my payload 7 $channel $payload $tags ]
 }
 
+::oo::define ::cluster::cluster method disconnect_payload { {payload {}} {tags 1} {flags 1} } {
+  return [my payload 0 0 $payload $tags $flags]
+}
+
 ::oo::define ::cluster::cluster method query_payload { ruid query {filter {}} {channel 0} {tags 0} {flags 0} } {
   return [ my payload 4 $channel [dict create \
     ruid $ruid  \
@@ -73,7 +81,7 @@
 }
 
 ::oo::define ::cluster::cluster method response_payload { response channel {tags 0} {flags 0} } {
-  return [ my payload 5 $channel $response $tags $flags ]
+  return [my payload 5 $channel $response $tags $flags]
 }
 
 # Services are a list of service_id's that are being requested.  They will be expected to
@@ -85,16 +93,16 @@
 # Because of this, the service is expected to make its response by broadcast as well.
 ::oo::define ::cluster::cluster method ping_payload { services {channel 0} } {
   return [ my payload 3 $channel [dict create \
-    data $services 
+    data $services
   ]]
 }
 
-# Event Payload is sent when we simply want to send data to a member of the cluster. 
+# Event Payload is sent when we simply want to send data to a member of the cluster.
 ::oo::define ::cluster::cluster method event_payload { request channel {tags 0} {flags 0} } {
   return [ my payload 6 $channel $request $tags $flags ]
 }
 
-# Event Payload is sent when we simply want to send data to a member of the cluster. 
+# Event Payload is sent when we simply want to send data to a member of the cluster.
 ::oo::define ::cluster::cluster method failed_payload { request {channel 0} {tags 0} {flags 0} } {
   return [ my payload 8 $channel [dict create data $request] $tags $flags ]
 }

@@ -9,13 +9,15 @@
       # service.
       dict set payload filter [my sid]
     }
-    
+
     set packet [::cluster::packet::encode $payload]
     set sent   {}
     set attempts [list]
     #puts "Send to [self]"
     foreach protocol $protocols {
-      if { $protocol in $attempts } { continue }
+      if { $protocol in $attempts } {
+        continue
+      }
       # We attempt to send to each protocol defined.  If our send returns true, we
       # expect the send was successful and return the protocol that was used for the
       # communication.
@@ -31,31 +33,31 @@
         # protocol
         continue
       }
-      
+
       # Obtain the reference for the protocol from our $cluster if it exists.
       set proto [$CLUSTER protocol $protocol]
-      
-      if { $proto eq {} } { 
+
+      if { $proto eq {} } {
         # This protocol is not supported by our local service.  We will move on to
         # the next one.
         continue
       }
-      
+
       if { ! $LOCAL } {
         # Some protocols are local-only.  We need to check if this is the case and
         # skip the protocol if this service is not local to the system.
         #
-        # In general a protocol will already implement a check like this, but we 
-        # want to run it so that we do not even attempt a transmission.  This way 
-        # if we try to send to a service that is not local we do not try to ping 
+        # In general a protocol will already implement a check like this, but we
+        # want to run it so that we do not even attempt a transmission.  This way
+        # if we try to send to a service that is not local we do not try to ping
         # it needlessly due to this failure.
         set descriptor [$proto descriptor]
         if { [dict exists $descriptor local] && [dict get $descriptor local] } {
           continue
         }
       }
-      
-      if { [$proto send $packet [self]] } { 
+
+      if {[$proto send $packet [self]]} {
         # If we successfully sent a packet and failed with other protocols, we
         # inform the given service of the failed protocols that we attempted
         # so that it can attempt to fix itself if possible.
@@ -63,12 +65,12 @@
           my ReportFailedAttempts $protocol $attempts $allow_broadcast
         }
         #puts "Success to $protocol"
-        return $protocol 
-      } else { 
-        lappend attempts $protocol 
+        return $protocol
+      } else {
+        lappend attempts $protocol
       }
     }
-    
+
     # We were unable to send to a service that was requested.  It is possible the service no longer
     # exists.  When this occurs we broadcast a public ping of the service to indicate to the other
     # members that it may no longer exist.  This way we can cleanup services before the TTL period
@@ -79,7 +81,7 @@
       # ping request from ourselves or another member.
       $CLUSTER schedule_service_ping [my sid]
     }
-    
+
     # If none of the attempted protocols were successful, we return an empty value
     # to the caller.
     #::utils::flog "Failed to Send to Cluster Service | [self]"
@@ -100,5 +102,7 @@
   #puts $success_protocol
   try {
     my send $payload $success_protocol $allow_broadcast 0 0
-  } on error {r o} { puts $r }
+  } on error {r o} {
+    puts stderr $r
+  }
 }

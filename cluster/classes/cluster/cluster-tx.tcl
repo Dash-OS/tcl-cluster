@@ -4,7 +4,7 @@
     set proto [dict get $PROTOCOLS c]
     try {my run_hook broadcast} on error {r} { return 0 }
     try {my run_hook channel [dict get $payload channel] send} on error {r} { return 0 }
-    return [ $proto send [::cluster::packet::encode $payload] ]
+    return [$proto send [::cluster::packet::encode $payload]]
   } on error {result options} {
     ::onError $result $options "While Broadcasting a Cluster Payload" $payload
   }
@@ -70,7 +70,6 @@
 #   -data      {}
 
 ::oo::define ::cluster::cluster method send { args } {
-
   set request [dict create]
   if { [dict exists $args -services] } {
     # A list of services to send to was provided directly

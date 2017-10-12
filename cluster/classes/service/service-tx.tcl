@@ -1,6 +1,8 @@
 ::oo::define ::cluster::service method send { payload {protocols {}} {allow_broadcast 1} {ping_on_fail 1} {report_failures 1} } {
   try {
-    if { $protocols eq {} } { set protocols $PROTOCOLS }
+    if { $protocols eq {} } {
+      set protocols $PROTOCOLS
+    }
     # Encode the packet that we want to send to the cluster.
     if { ! [dict exists $payload filter] } {
       # When sending to a service, if a filter was not provided we will
@@ -88,7 +90,7 @@
     #puts "Failed to Send to Service: [self] [string bytelength $packet]"
     return
   } on error {result options} {
-    ::onError $result $options "While Sending to a Cluster Service"
+    catch { ::onError $result $options "While Sending to a Cluster Service" }
     throw error $result
   }
 }

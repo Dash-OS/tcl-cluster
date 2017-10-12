@@ -138,7 +138,9 @@
 
   if { [dict exists $args -channel] } {
     set channel [dict get $args -channel]
-  } else { set channel 0 }
+  } else {
+    set channel 0
+  }
 
   if { [dict exists $args -ruid] } {
     dict set request ruid [dict get $args -ruid]
@@ -178,7 +180,8 @@
     # We need to send to each service.  We will examine the result and use it
     # to determine how to proceed.  We will not allow broadcasts with this command
     # as we will attempt to handle it ourselves if required.
-    set response [ my send_payload $services $payload $protocols 0 ]
+    set response [my send_payload $services $payload $protocols 0]
+    ~! "Response" "Cluster Send Response" -context $response
     if { $response eq {} } {
       # We will receive an empty response when a hook has cancelled the
       # transmission
@@ -209,14 +212,16 @@
 }
 
 ::oo::define ::cluster::cluster method send_payload { services payload protocols {allow_broadcast 0} } {
-  set success [dict create] ; set failed [dict create]
+  set success [dict create]
+  set failed  [dict create]
 
   try {my run_hook channel [dict get $payload channel] send} on error { r } { return }
+
   foreach service $services {
     try {
-      set result [ $service send $payload $protocols $allow_broadcast ]
+      set result [$service send $payload $protocols $allow_broadcast]
       if { $result eq {} } {
-        dict set failed $service [dict create status fail result negotiation_failure]
+        dict set failed $service  [dict create status fail result negotiation_failure]
       } else {
         dict set success $service [dict create status ok result $result]
       }

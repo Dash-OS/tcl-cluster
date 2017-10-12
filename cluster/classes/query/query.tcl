@@ -26,6 +26,7 @@
   if { [dict exists $args -resolve] } {
     lappend SERVICES {*}[$CLUSTER resolve [dict get $args -resolve]]
   }
+
   if { [dict exists $args -resolver] } {
     lappend SERVICES {*}[$CLUSTER resolver {*}[dict get $args -resolver]]
   }
@@ -42,11 +43,15 @@
 
   if { ! [dict exists $args -query] } {
     throw CLUSTER_QUERY_NO_QUERY "No Query was provided with the query request"
-  } else { set QUERY [dict get $args -query] }
+  } else {
+    set QUERY [dict get $args -query]
+  }
 
   if { ! [dict exists $args -command] } {
     throw CLUSTER_QUERY_NO_COMMAND "You must provide a -command to trigger with any responses"
-  } else { set COMMAND [dict get $args -command] }
+  } else {
+    set COMMAND [dict get $args -command]
+  }
 
   # Should we broadcast the query using filters?
   if { [dict exists $args -broadcast] && [dict get $args -broadcast] } {
@@ -62,7 +67,9 @@
 
   if { [dict exists $args -protocols] } {
     set protocols [dict get $args -protocols]
-  } else { set protocols {} }
+  } else {
+    set protocols {}
+  }
 
   # We always have a timeout value included.  This is how long we will keep our
   # query handler alive before removing it.  Any services which reply after the
@@ -73,15 +80,16 @@
     set TIMEOUT_ID [after [dict get $args -timeout] [namespace code [list my timeout]]]
   }
 
-  set filter [lmap e $SERVICES { $e sid }]
+  set filter [lmap e $SERVICES {$e sid}]
 
   set payload [$CLUSTER query_payload $QUERY_ID $QUERY $filter $CHANNEL]
 
-  if { $broadcast } {
+  if {$broadcast} {
     $CLUSTER broadcast $payload
   } else {
     foreach service $SERVICES {
-      set protocol [ $service send $payload $protocols 0 ]
+      # set protocol [$service send $payload $protocols 0]
+      $service send $payload $protocols 0
     }
   }
 
@@ -91,7 +99,9 @@
 ::oo::define ::cluster::query destructor {
   after cancel $TIMEOUT_ID
   my DispatchEvent done
-  catch { $CLUSTER query_done $QUERY_ID }
+  catch {
+    $CLUSTER query_done $QUERY_ID
+  }
 }
 
 ::oo::define ::cluster::query method event { ns args } {
@@ -100,10 +110,14 @@
       lassign $args SERVICE PAYLOAD
       dict set PAYLOADS $SERVICE $PAYLOAD
       set SERVICES [lsearch -all -inline -not -exact $SERVICES $SERVICE]
-      if { [dict exists $PAYLOAD error] } {
+      if {[dict exists $PAYLOAD error]} {
         my DispatchEvent error
-      } else { my DispatchEvent response }
-      if { $SERVICES eq {} } { [self] destroy }
+      } else {
+        my DispatchEvent response
+      }
+      if { $SERVICES eq {} } {
+        [self] destroy
+      }
     }
   }
 }
@@ -127,7 +141,7 @@
 }
 
 ::oo::define ::cluster::query method result {} {
-  if { [dict exists $PAYLOAD data] } {
+  if {[dict exists $PAYLOAD data]} {
     return [dict get $PAYLOAD data]
   }
 }
@@ -156,7 +170,9 @@
         ]
       }
       if { $code == 3 } {
-        if { ! [string equal $event done] } { [self] destroy }
+        if { ! [string equal $event done] } {
+          [self] destroy
+        }
       }
     }
     1 { # ERROR

@@ -15,7 +15,7 @@
       if { ! [dict exists $descriptor local] } {
         if { ! [my is_local [dict get $descriptor address]] } {
           puts "Received from Non Local Source: $descriptor"
-          puts [::cluster::packet::decode $packet [self]]
+          # puts [::cluster::packet::decode $packet [self]]
           return
         } else {
           dict set descriptor local 1
@@ -23,7 +23,7 @@
       } else {
         if { ! [dict get $descriptor local] } {
           puts "Received from Non Local Source: $descriptor"
-          puts [::cluster::packet::decode $packet [self]]
+          # puts [::cluster::packet::decode $packet [self]]
           return
         }
       }
@@ -114,7 +114,9 @@
     # with the service.  If we validate, then we will return the
     # reference to the service to our handler.
     try {my run_hook service validate} on error {r} { return }
-    if { [$service validate $proto $chanID $payload $descriptor] } { return $service }
+    if { [$service validate $proto $chanID $payload $descriptor] } {
+      return $service
+    }
   } else {
     # If we have never seen this service, we will create it.  We will check
     # it against our security policies and retain it if it is a service we

@@ -70,19 +70,25 @@ set ::bpacket::value_ids [dict create \
 }
 
 ::oo::define ::bpacket::writer method build { data } {
-  if { $TEMPLATE eq {} } { throw error "Building required template" }
+  if { $TEMPLATE eq {} } {
+    throw error "Building required template"
+  }
+
   lassign $TEMPLATE schema map required
+
   dict for {k v} $data {
     if { [dict exists $map $k] } {
       lassign [dict get $map $k] value_type required params
       set field_id $k
     } elseif { [dict exists $schema $k] } {
-
+      puts "Not in $map"
+      puts $schema
     } else {
       throw error "Encoding Failed: $k is not a known field"
     }
     my append [ my field $field_id $value_type $v ]
   }
+
   return [my get]
 }
 

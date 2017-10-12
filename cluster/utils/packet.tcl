@@ -49,6 +49,7 @@ proc ::cluster::packet::encode { payload } {
     5 [clock seconds] \
     6 [dict get $payload protocols]
   ]]
+
   if { [dict exists $payload error] } {
     dict set packet_dict 14 [dict get $payload error]
   }
@@ -66,17 +67,21 @@ proc ::cluster::packet::encode { payload } {
   if { [dict exists $payload raw] && [dict get $payload raw] ne {} } {
     dict set packet_dict 10 [dict get $payload raw]
   }
-  if { [dict exists $payload tags] } { dict set packet_dict 11 [dict get $payload tags] }
+  if { [dict exists $payload tags] } {
+    dict set packet_dict 11 [dict get $payload tags]
+  }
   if { [dict exists $payload keepalive] } {
     dict set packet_dict 12 [dict get $payload keepalive]
   }
-  return [$::cluster::packet::encoder build $packet_dict]
+  set encoded [$::cluster::packet::encoder build $packet_dict]
+  return $encoded
 }
 
 proc ::cluster::packet::decode { packet {cluster {}} } {
   try {
-    set reader [::bpacket::reader new $packet]
-    set result [dict create]
+    # ~! "Decode Packet" "Decoding a Packet [string bytelength $packet]"
+    set reader  [::bpacket::reader new $packet]
+    set result  [dict create]
     set results [list]
     set active 1
     while {$active} {
@@ -110,10 +115,14 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
               # When we receive a filter we will immediately try to check with the
               # cluster if our service matches and quit decoding immediately if we
               # dont.
-              if { $cluster ne {} && ! [$cluster check_filter $data] } { break }
+              if { $cluster ne {} && ! [$cluster check_filter $data] } {
+                break
+              }
               dict set result filter $data
             }
-            14 { dict set result error $data }
+            14 {
+              dict set result error $data
+            }
           }
         }
         2 {
@@ -126,9 +135,12 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
     }
     $reader destroy
   } on error {result options} {
-    #puts stderr "Malformed Packet! $result"
+    puts stderr "Malformed Packet! $result"
+    catch { ::onError $result $options "Malformed Packet!" }
     catch { $reader destroy }
   }
-  if { $active } { set result {} }
+  if { $active } {
+    set result {}
+  }
   return $results
 }

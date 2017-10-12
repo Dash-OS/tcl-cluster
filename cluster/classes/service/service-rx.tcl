@@ -14,7 +14,6 @@
 }
 
 ::oo::define ::cluster::service method receive { proto chanID payload descriptor remaining } {
-
   set data {}
   set protocol [$proto proto]
   dict with payload {}
@@ -86,7 +85,7 @@
       # When a service provides us with a response to a query we will attempt to
       # call the query objects event method with a reference to our service.
       #
-      # If the query has already timed out, not will happen.
+      # If the query has already timed out, nothing will happen.
       my heartbeat
       if { ! [info exists ruid] } {
         return
@@ -136,7 +135,7 @@
   #     $payload
 
   #   "
-  if { $remaining == 0 } {
+  if {$remaining == 0} {
     $proto done [self] $chanID $keepalive
   }
 

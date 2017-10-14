@@ -13,18 +13,20 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 }
 
 ::oo::define ::cluster::protocol::c {
-  variable SOCKET PORT CLUSTER ID CONFIG
+  variable SOCKET PORT CLUSTER ID CONFIG STREAM
 }
 
 ::oo::define ::cluster::protocol::c constructor { cluster id config } {
   set ID      $id
   set CONFIG  $config
   set CLUSTER $cluster
+  set STREAM  [bpacket stream new]
   my CreateServer
 }
 
 ::oo::define ::cluster::protocol::c destructor {
   catch { chan close $SOCKET }
+  catch { $STREAM destroy }
 }
 
 ::oo::define ::cluster::protocol::c method proto {} { return c }
@@ -127,9 +129,10 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 ::oo::define ::cluster::protocol::c method Receive {} {
   if { [chan eof $SOCKET] } {
     catch { chan close $SOCKET }
-    after 0 [namespace code [list my CreateServer]]
+    after 0 [list catch [list [namespace code [list my CreateServer]]]]
     return
   }
-  set packet [read $SOCKET]
+  set bytes [read $SOCKET]
+
   $CLUSTER receive [my proto] $SOCKET $packet
 }

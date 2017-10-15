@@ -3,9 +3,9 @@ if { [info commands ::onError] eq {} } {
   # here.
   # TODO: Provide official way to handle the logging / errors.
   proc ::onError { result options args } {
-    puts "Error Occurred!"
-    puts $result
-    puts $options
+    puts stderr "Error Occurred!"
+    puts stderr $result
+    puts stderr $options
   }
 }
 
@@ -18,7 +18,6 @@ if 0 {
 proc ::cluster::rand {min max} {
   expr { int(rand() * ($max - $min + 1) + $min)}
 }
-
 
 proc ::cluster::query_id {} { incr ::cluster::i }
 

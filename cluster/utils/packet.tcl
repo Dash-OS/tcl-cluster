@@ -1,4 +1,4 @@
-package require bpacket;
+package require bpacket
 
 namespace eval ::cluster {}
 namespace eval ::cluster::packet {}
@@ -50,10 +50,6 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
     } $cluster]
   ]
 }
-
-# proc -> {pargs script args} {
-#   list ::apply [list $pargs $script] {*}$args
-# }
 
 # TODO: trash this once we confirm the above rewrite is working
 # try {

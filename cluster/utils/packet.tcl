@@ -38,7 +38,16 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
         # notes:
         #   - modify field with   upvar field   if needed
         #   - modify results with upvar results if needed
+        set value [dict get $field value]
         switch -- [dict get $field id] {
+          4  {
+            if {$cluster eq {} || $value eq [$cluster sid]} {
+              # if we receive a sid and it appears to come from us,
+              # stop parsing the packet
+              puts "RECEIVE FROM SELF - QUIT"
+              return false
+            }
+          }
           14 {
             # check the filter and only continue if we match
             if {$cluster ne {} && ! [$cluster check_filter $data]} {

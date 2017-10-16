@@ -181,7 +181,6 @@
     # to determine how to proceed.  We will not allow broadcasts with this command
     # as we will attempt to handle it ourselves if required.
     set response [my send_payload $services $payload $protocols 0]
-    ~! "Response" "Cluster Send Response" -context $response
     if { $response eq {} } {
       # We will receive an empty response when a hook has cancelled the
       # transmission

@@ -81,8 +81,8 @@
     return 0
   }
   set SERVICE_EXPECTED 1
-  set NEW_HEARTBEAT [expr { [clock seconds] - [$CLUSTER ttl] + $within }]
-  if { $NEW_HEARTBEAT < $LAST_HEARTBEAT } {
+  set NEW_HEARTBEAT [expr {[clock seconds] - [$CLUSTER ttl] + $within}]
+  if {$NEW_HEARTBEAT < $LAST_HEARTBEAT} {
     set LAST_HEARTBEAT $NEW_HEARTBEAT
   }
   return 1

@@ -13,6 +13,7 @@
     }
 
     set packet [::cluster::packet::encode $payload]
+
     set sent   {}
     set attempts [list]
     #puts "Send to [self]"

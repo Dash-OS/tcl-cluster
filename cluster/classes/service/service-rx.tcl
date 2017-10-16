@@ -28,7 +28,7 @@
   # Did our partner request that we keep the channel alive?  If the property exists, we will
   # send it with any reply that may be sent.
   if { ! [info exists keepalive] } {
-    set keepalive 0
+    set keepalive false
   } else {
     dict set response keepalive $keepalive
   }
@@ -66,7 +66,9 @@
       # All cluster members should reduce the TTL of the given services when they
       # receive this so that the service will be terminated within the next
       # ___ seconds.
-      if { $data ne {} } { $CLUSTER expect_services $data }
+      if { $data ne {} } {
+        $CLUSTER expect_services $data
+      }
     }
     4 {
       # Query
@@ -92,7 +94,7 @@
       }
       $CLUSTER query_response [self] $payload
       # Close the connection automatically after giving our response
-      set keepalive 0
+      set keepalive false
     }
     6 {
       # Event

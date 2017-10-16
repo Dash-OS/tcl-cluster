@@ -39,15 +39,15 @@
   return $channel
 }
 
-::oo::define ::cluster::cluster method payload { type channel payload {tags 0} {flags 1} } {
+::oo::define ::cluster::cluster method payload { type channel payload {tags 0} {known 1} } {
   set payload [dict merge [dict create \
+    sid       $SERVICE_ID \
+    hid       $SYSTEM_ID \
     type      [my get_type $type] \
     channel   [my get_channel $channel] \
-    hid       $SYSTEM_ID \
-    sid       $SERVICE_ID \
     protocols [my protocols]
   ] $payload]
-  if { $flags } { dict set payload flags [my flags] }
+  if { $known } { dict set payload known [my known_services] }
   if { $tags  } { dict set payload tags $TAGS }
   return $payload
 }
@@ -71,17 +71,17 @@
   return [my payload 0 0 $payload $tags $flags]
 }
 
-::oo::define ::cluster::cluster method query_payload { ruid query {filter {}} {channel 0} {tags 0} {flags 0} } {
+::oo::define ::cluster::cluster method query_payload { ruid query {filter {}} {channel 0} {tags 0} {known 0} } {
   return [ my payload 4 $channel [dict create \
     ruid $ruid  \
     data $query \
     filter $filter \
     keepalive 1
-  ] $tags $flags ]
+  ] $tags $known ]
 }
 
-::oo::define ::cluster::cluster method response_payload { response channel {tags 0} {flags 0} } {
-  return [my payload 5 $channel $response $tags $flags]
+::oo::define ::cluster::cluster method response_payload { response channel {tags 0} {known 0} } {
+  return [my payload 5 $channel $response $tags $known]
 }
 
 # Services are a list of service_id's that are being requested.  They will be expected to
@@ -98,11 +98,11 @@
 }
 
 # Event Payload is sent when we simply want to send data to a member of the cluster.
-::oo::define ::cluster::cluster method event_payload { request channel {tags 0} {flags 0} } {
-  return [my payload 6 $channel $request $tags $flags]
+::oo::define ::cluster::cluster method event_payload { request channel {tags 0} {known 0} } {
+  return [my payload 6 $channel $request $tags $known]
 }
 
 # Event Payload is sent when we simply want to send data to a member of the cluster.
-::oo::define ::cluster::cluster method failed_payload { request {channel 0} {tags 0} {flags 0} } {
-  return [ my payload 8 $channel [dict create data $request] $tags $flags ]
+::oo::define ::cluster::cluster method failed_payload { request {channel 0} {tags 0} {known 0} } {
+  return [my payload 8 $channel [dict create data $request] $tags $known]
 }

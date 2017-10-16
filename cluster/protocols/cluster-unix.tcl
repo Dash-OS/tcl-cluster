@@ -5,15 +5,14 @@
 # A protocol must generally define both a SERVER and a CLIENT handler.  For our
 # server, we expect to listen to connections from clients and pass them to our
 # cluster so it can be properly handled.
-
 package require unix_sockets
 
-if { [info commands ::cluster::protocol::u] eq {} } {
+if {[info commands ::cluster::protocol::u] eq {}} {
   ::oo::class create ::cluster::protocol::u {}
 }
 
 ::oo::define ::cluster::protocol::u {
-  variable SOCKET SERVER_PATH CLUSTER ID
+  variable SOCKET SERVER_PATH CLUSTER ID STREAM
 }
 
 ::oo::define ::cluster::protocol::u constructor { cluster id config } {
@@ -25,14 +24,33 @@ if { [info commands ::cluster::protocol::u] eq {} } {
   if { ! [dict exists $config u path] } {
     throw error "Must define a path or prefix path for our unix server within the u config"
   }
-  set SERVER_PATH [file normalize [file nativename [dict get $config u path]]]
-  append SERVER_PATH - [$CLUSTER sid]
+  my SetServerPath $config
+  my CreateStream
   my CreateServer
+}
+
+::oo::define ::cluster::protocol::u method SetServerPath config {
+  set SERVER_PATH [file normalize \
+    [file nativename [dict get $config u path]]
+  ]
+  append SERVER_PATH - [$CLUSTER sid]
+}
+
+::oo::define ::cluster::protocol::u method CreateStream {} {
+  if {[info exists STREAM]} { return $STREAM }
+  set STREAM [bpacket create stream [namespace current]::stream]
+  $STREAM event [namespace code [list \
+    my ReceivePacket
+  ]]
+  return $STREAM
 }
 
 ::oo::define ::cluster::protocol::u destructor {
   catch {
     my CloseSocket $SOCKET {} 0
+  }
+  catch {
+    $STREAM destroy
   }
 }
 
@@ -56,10 +74,12 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 # $service is not strictly required by all protocols so it is possible that
 # it will not be included.  Should this protocol require a reference to the
 # service then it should simply throw an error.
-::oo::define ::cluster::protocol::u method send { packet {service {}} {attempts {}} } {
+::oo::define ::cluster::protocol::u method send {packet {service {}} {attempts {}}} {
   try {
     # Get the props and data required from the service
-    if { $service eq {} } { throw error "No Service Provided to UNIX Protocol" }
+    if {$service eq {}} {
+      throw error "No Service Provided to UNIX Socket Cluster Protocol"
+    }
     # Since this is a local protocol, we will only attempt to send if the
     # service is a local service
     if { ! [$service local] } {
@@ -68,7 +88,7 @@ if { [info commands ::cluster::protocol::u] eq {} } {
     # First check if we have an open socket and see if we can use that. If
     # we can, continue - otherwise open a new connection to the client.
     set sock [$service socket [my proto]]
-    if { $sock ne {} } {
+    if {$sock ne {}} {
       try {
         puts -nonewline $sock $packet
       } on error {result options} {
@@ -76,9 +96,12 @@ if { [info commands ::cluster::protocol::u] eq {} } {
         set sock {}
       }
     }
-    if { $sock eq {} } {
+    if {$sock eq {}} {
       set sock [my OpenSocket $service]
       puts -nonewline $sock $packet
+    }
+    if {$sock ne {}} {
+      chan flush $sock
     }
     return 1
   } on error {r} {
@@ -91,7 +114,7 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 # information as-to how the completed data should be parsed.
 # Cluster ignores any close requests due to no keep alive.
 ::oo::define ::cluster::protocol::u method done { service chanID keepalive {response {}} } {
-  if { [string is false $keepalive] } {
+  if {[string is false $keepalive]} {
     my CloseSocket $chanID $service
   }
 }
@@ -130,7 +153,7 @@ if { [info commands ::cluster::protocol::u] eq {} } {
       # with too many sockets that are not needed.  If a service actually exists,
       # it will re-create the file upon the next heartbeat.
       set props [$service proto_props u]
-      if { [dict exists $props path] } {
+      if {[dict exists $props path]} {
         set file [dict get $props path]
         if { [file exists $file] } {
           file delete -force -- $file
@@ -142,35 +165,44 @@ if { [info commands ::cluster::protocol::u] eq {} } {
 
 ## Below are methods that are either specific to the protocol or that are
 ## not required by the cluster.
-
 ::oo::define ::cluster::protocol::u method CreateServer { } {
-  if { [info exists SOCKET] } { catch { my CloseSocket $SOCKET } }
-  if { [file exists $SERVER_PATH] } { file delete -force -- $SERVER_PATH }
+  if {[info exists SOCKET] && $SOCKET in [chan names] } {
+    my CloseSocket $SOCKET
+  }
+  if {[file exists $SERVER_PATH]} {
+    file delete -force -- $SERVER_PATH
+  }
   file mkdir [file dirname $SERVER_PATH]
   set SOCKET [::unix_sockets::listen \
-    $SERVER_PATH [namespace code [list my Connect $SERVER_PATH {}]]
+    $SERVER_PATH [namespace code [list \
+      my Connect $SERVER_PATH {} \
+    ]]
   ]
   $CLUSTER event channel server [my proto] $SOCKET
 }
 
 ::oo::define ::cluster::protocol::u method Connect { path service chanID } {
-  chan configure $chanID -blocking 0 -translation binary -buffering none
+  chan configure $chanID \
+    -blocking    0 \
+    -translation binary \
+    -buffering   full
+
   chan event $chanID readable [namespace code [list my Receive $chanID]]
   $CLUSTER event channel open [my proto] $chanID $service
 }
 
 ::oo::define ::cluster::protocol::u method Receive { chanID } {
   try {
-    if { [eof $chanID] || [catch {read $chanID} data] } {
+    if {[chan eof $chanID]} {
       set reset 1
     } else {
-      $CLUSTER receive [my proto] $chanID $data
+      $STREAM append [read $chanID] $chanID
     }
   } on error {result} {
     ::onError $result $options "While Receiving Data from UNIX Cluster Comm"
     set reset 1
   } finally {
-    if { [info exists reset] && [string is true -strict $reset] } {
+    if {[info exists reset] && [string is true -strict $reset]} {
       my CloseSocket $chanID
       if { $chanID eq $SOCKET } {
         my CreateServer
@@ -179,15 +211,19 @@ if { [info commands ::cluster::protocol::u] eq {} } {
   }
 }
 
-::oo::define ::cluster::protocol::u method CloseSocket { chanID {service {}} } {
-  catch {
+::oo::define ::cluster::protocol::u method ReceivePacket {packet chanID} {
+  $CLUSTER receive [my proto] $chanID $packet
+}
+
+::oo::define ::cluster::protocol::u method CloseSocket {chanID {service {}}} {
+  if {$chanID in [chan names]} {
     chan close $chanID
   }
-  if { [info exists SOCKET] && $chanID eq $SOCKET } {
+  if {[info exists SOCKET] && $chanID eq $SOCKET} {
     unset SOCKET
-  }
-  if {[file exists $SERVER_PATH]} {
-    file delete -force -- $SERVER_PATH
+    if {[file exists $SERVER_PATH]} {
+      file delete -force -- $SERVER_PATH
+    }
   }
   $CLUSTER event channel close [my proto] $chanID $service
 }

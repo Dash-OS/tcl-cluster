@@ -14,11 +14,17 @@ if { [info commands ::cluster::protocol::t] eq {} } {
 }
 
 ::oo::define ::cluster::protocol::t constructor { cluster id config } {
-  set ID $id
-  set CLUSTER  $cluster
-  set STREAM  [bpacket create stream [namespace current]::stream]
-  $STREAM event [namespace code [list my ReceivePacket]]
+  set ID      $id
+  set CLUSTER $cluster
+  my CreateStream
   my CreateServer
+}
+
+::oo::define ::cluster::protocol::t method CreateStream {} {
+  if {[info exists STREAM]} { return $STREAM }
+  set STREAM [bpacket create stream [namespace current]::stream]
+  $STREAM event [namespace code [list my ReceivePacket]]
+  return $STREAM
 }
 
 ::oo::define ::cluster::protocol::t destructor {
@@ -143,26 +149,25 @@ if { [info commands ::cluster::protocol::t] eq {} } {
   $CLUSTER event channel open [my proto] $chanID $service
 }
 
-::oo::define ::cluster::protocol::t method Receive { chanID } {
+::oo::define ::cluster::protocol::t method Receive chanID {
   try {
-    set data [read $chanID]
-    if { [chan eof $chanID] } {
+    if {[chan eof $chanID]} {
       my CloseSocket $chanID
-    }
-    if { [string bytelength $data] > 0 } {
-      $STREAM append $data $chanID
+    } else {
+      $STREAM append [read $chanID] $chanID
     }
   } on error {result options} {
-    ::onError $result $options "Cluster - TCP Receive Error" $chanID
+    catch {::onError $result $options "Cluster - TCP Receive Error" $chanID}
   }
 }
 
-::oo::define ::cluster::protocol::t method ReceivePacket {chanID packet} {
+# called by our bpacket stream when it receives a full packet
+::oo::define ::cluster::protocol::t method ReceivePacket {packet chanID} {
   $CLUSTER receive [my proto] $chanID $packet
 }
 
 ::oo::define ::cluster::protocol::t method CloseSocket { chanID {service {}} } {
-  catch {
+  if {$chanID in [chan names]} {
     chan close $chanID
   }
   $CLUSTER event channel close [my proto] $chanID $service
@@ -181,7 +186,7 @@ if { [info commands ::cluster::protocol::t] eq {} } {
   set port    [dict get $props port]
 
   # TODO: Change this to use -async
-  set sock    [socket $address $port]
+  set sock [socket $address $port]
 
   my Connect $sock $address $port $service
 

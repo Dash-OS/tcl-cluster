@@ -33,7 +33,9 @@
       dict unset CHANNELS $chanID
     }
     r* - receive {
-      if { $service ne {} } { dict set CHANNELS $chanID service $service }
+      if { $service ne {} } {
+        dict set CHANNELS $chanID service $service
+      }
     }
     s* - server {
       # Server Channel refreshed - we need to send an updated protoprops

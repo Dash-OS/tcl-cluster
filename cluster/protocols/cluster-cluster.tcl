@@ -20,9 +20,15 @@ if { [info commands ::cluster::protocol::c] eq {} } {
   set ID      $id
   set CONFIG  $config
   set CLUSTER $cluster
+
+  my CreateServer
+}
+
+::oo::define ::cluster::protocol::c method CreateStream {} {
+  if {[info exists STREAM]} { return $STREAM }
   set STREAM  [bpacket create stream [namespace current]::stream]
   $STREAM event [namespace code [list my ReceivePacket]]
-  my CreateServer
+  return $STREAM
 }
 
 ::oo::define ::cluster::protocol::c destructor {
@@ -43,7 +49,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # 1 or 0 to indicate success of failure.
 ::oo::define ::cluster::protocol::c method send { packet {service {}} } {
   try {
-    if { [string length $packet] > 0 } {
+    if {[string length $packet] > 0} {
       puts -nonewline $SOCKET $packet
       chan flush $SOCKET
     }
@@ -95,7 +101,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
     }
     service_lost {
       # When a service is lost, each protocol is informed in case it needs to do cleanup
-      lassign $args service
+      # lassign $args service
     }
   }
 }
@@ -110,8 +116,8 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # cluster port.
 ::oo::define ::cluster::protocol::c method CreateServer {} {
   dict with CONFIG {}
-  if { [info exists SOCKET] } {
-    catch { chan close $SOCKET }
+  if {[info exists SOCKET] && $SOCKET in [chan names]} {
+    chan close $SOCKET
   }
   set SOCKET [udp_open $port reuse]
   set PORT   $port
@@ -122,7 +128,11 @@ if { [info commands ::cluster::protocol::c] eq {} } {
     -translation binary   \
     -mcastadd    $address \
     -remote      [list $address $port] \
-    -ttl         [expr { [string is false -strict $remote] ? 0 : $remote }]
+    -ttl         [expr {
+      [string is false -strict $remote]
+        ? 0
+        : $remote
+    }]
   chan event $SOCKET readable [namespace code [list my Receive]]
 }
 
@@ -131,17 +141,18 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # we can still apply our Security Policies against it if required.
 ::oo::define ::cluster::protocol::c method Receive {} {
   if {[chan eof $SOCKET]} {
-    catch { chan close $SOCKET }
+    chan close $SOCKET
     after 0 [list catch [list [namespace code [list my CreateServer]]]]
     return
   }
   # append the available bytes to the protocol stream so that it can
   # build any packets that it finds
-  $STREAM append [read $SOCKET]
+  $STREAM append [read $SOCKET] $SOCKET
 }
 
 # our stream handler will call this with complete packets
 # when they are ready
-::oo::define ::cluster::protocol::c method ReceivePacket packet {
-  $CLUSTER receive [my proto] $SOCKET $packet
+::oo::define ::cluster::protocol::c method ReceivePacket {packet chanID} {
+  # chanID will simply be "default" in this case since we do not use them.
+  $CLUSTER receive [my proto] $chanID $packet
 }

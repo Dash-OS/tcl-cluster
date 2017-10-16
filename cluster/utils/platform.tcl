@@ -22,7 +22,10 @@ if 0 {
     Add support for other platforms such as windows.
 }
 switch -- $::tcl_platform(platform) {
-  unix { package require unix }
+  unix {
+    package require unix
+    # unix requires tuapi if possible 
+  }
 }
 
 if 0 {
@@ -158,11 +161,10 @@ if 0 {
 proc ::cluster::islocal { descriptor } {
   if { [dict exists $descriptor address] } {
     set address [dict get $descriptor address]
-  } else { return false }
-  if {
-       $address in [local_addresses]
-    || $address eq "127.0.0.1"
-  } {
+  } else {
+    return false
+  }
+  if {$address in [local_addresses]} {
     return true
   } else {
     return false
@@ -187,7 +189,7 @@ proc ::cluster::local_addresses {{force false}} {
   set addresses [list localhost 127.0.0.1]
   switch -- [platform] {
     linux - osx {
-      if {[info commands ::tuapi::ifconfigs] ne {}} {
+      if {[info commands ::tuapi::ifconfig] ne {}} {
         dict for { iface params } [::tuapi::ifconfig] {
           if { [dict exists $params address] } {
             set address [dict get $params address]
@@ -203,7 +205,17 @@ proc ::cluster::local_addresses {{force false}} {
             [exec -ignorestderr -- ifconfig | grep -e "inet " | awk "{print \$2}"] \
           ] \
         "\n"]
+        if {"localhost" ni $addresses} {
+          lappend addresses localhost
+        }
+        if {"127.0.0.1" ni $addresses} {
+          lappend addresses 127.0.0.1
+        }
       }
+    }
+    default {
+      # TODO: Handle the situation that we dont know the platform type or
+      #       the platform is not handled yet.
     }
   }
   return $addresses

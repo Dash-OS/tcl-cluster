@@ -14,6 +14,7 @@
     || ! [info exists sid]
     || ! [info exists hid]
   } {
+    # TODO: Log this situation 
     return 0
   }
 
@@ -146,18 +147,20 @@
 }
 
 # Our objects accessors
-::oo::define ::cluster::service method ip        {} { return $ADDRESS }
-::oo::define ::cluster::service method props     {} { return $PROPS   }
-::oo::define ::cluster::service method tags      {} { return $TAGS    }
-::oo::define ::cluster::service method local     {} { return $LOCAL   }
-::oo::define ::cluster::service method hid       {} { return $SYSTEM_ID  }
-::oo::define ::cluster::service method sid       {} { return $SERVICE_ID }
-::oo::define ::cluster::service method protocols {} { return $PROTOCOLS }
-::oo::define ::cluster::service method resolver_tags {} { return $RESOLVER    }
+
+::oo::define ::cluster::service method sid           {} { return $SERVICE_ID }
+::oo::define ::cluster::service method hid           {} { return $SYSTEM_ID }
+::oo::define ::cluster::service method protocols     {} { return $PROTOCOLS }
+::oo::define ::cluster::service method resolver_tags {} { return $RESOLVER }
+::oo::define ::cluster::service method ip            {} { return $ADDRESS }
+::oo::define ::cluster::service method props         {} { return $PROPS }
+::oo::define ::cluster::service method local         {} { return $LOCAL }
+::oo::define ::cluster::service method tags          {} { return $TAGS }
+
 
 # How many seconds has it been since the last heartbeat was received from the service?
 ::oo::define ::cluster::service method last_seen {} {
-  return [expr { [clock seconds] - $LAST_HEARTBEAT }]
+  expr { [clock seconds] - $LAST_HEARTBEAT }
 }
 
 ::oo::define ::cluster::service method proto_props protocol {

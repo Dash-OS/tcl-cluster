@@ -180,12 +180,23 @@ proc ::cluster::join args {
     if { ! [dict exists $config $k] && $k ni $protocols } {
       throw CLUSTER_INVALID_ARGS "Invalid Cluster Config Key: ${k}, should be one of [dict keys $config]"
     }
-    if { [string equal $k protocols] } {
+    if {$k eq "protocols"} {
       # cluster protocol is required, add if defined without it
-      if { "c" ni $v } { lappend v c }
+      if { "c" ni $v } {
+        lappend v c
+      }
     }
     dict set config $k $v
   }
+  
+  # in case a boolean is passed to remote value, we convert to number
+  # style boolean
+  set remote [dict get $config remote]
+  if {$remote eq true || $remote eq false} {
+    # bool() will convert to a 0 or 1 style boolean
+    dict set config remote [expr {bool($remote)}]
+  }
+
   set id [incr ::cluster::i]
   return [::cluster::cluster create ::cluster::clusters::cluster_$id $id $config]
 }

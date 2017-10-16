@@ -103,8 +103,12 @@
       set info [$service info]
       if { [dict exists $info last_seen] } {
         set lastSeen [dict get $info last_seen]
-        if { $lastSeen > [dict get $CONFIG ttl] } { $service destroy }
-      } else { $service destroy }
+        if { $lastSeen > [dict get $CONFIG ttl] } {
+          $service destroy
+        }
+      } else {
+        $service destroy
+      }
     } on error {result options} {
       #~ "Service Check Error: $result"
       catch { $service destroy }

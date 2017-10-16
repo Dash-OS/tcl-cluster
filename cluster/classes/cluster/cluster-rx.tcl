@@ -1,13 +1,14 @@
 # Called by any of our supported protocols to parse / handle a received payload
 # from a remote/local client.  We will check to make sure the given service passes
 # our Security Policies and pass the payload through to our handlers if it does.
+#
+# NOTE: As of version >1.1.4 packets are processed by our bpacket streams so we know
+#       that any packets we might receive at this point will be complete packets.
 ::oo::define ::cluster::cluster method receive { protocol chanID packet } {
   try {
-    # Trim then check to make sure the data is not empty. If it is, cancel evaluation.
-    if { [string trim $packet] eq {} } { return }
     # Get information about the requester from the protocol
-    set proto      [ my protocol $protocol ]
-    set descriptor [ $proto descriptor $chanID ]
+    set proto      [my protocol $protocol]
+    set descriptor [$proto descriptor $chanID]
 
     if { [string is false -strict [dict get $CONFIG remote]] } {
       # When we have defined that we only wish to work with local scripts, we will
@@ -28,23 +29,26 @@
         }
       }
     }
-
     # Attempt to decode the received packet.
     # An empty payload will be returned if we fail to decode the packet for any reason.
     set payloads           [::cluster::packet::decode $packet [self]]
     set payloads_remaining [llength $payloads]
-
     foreach payload $payloads {
-      if { $payload eq {} || ! [dict exists $payload sid] || [dict get $payload sid] eq $SERVICE_ID } {
-        # Ignore empty payloads or payloads that we receive from ourselves.
-        return
-      }
+      # DEPRECIATED
+      # NOTE: As of version >1.1.4 this should be handled by bpacket streams
+      #       and our -validate process during packet decoding
+      # if {$payload eq {} || ! [dict exists $payload sid]} {
+      #   # Ignore empty payloads or payloads that we receive from ourselves.
+      #   return
+      # }
       # Are we currently listening to the channel that the communication was
       # received on?
-      if { [dict get $payload channel] ni $COMM_CHANNELS } {
-        puts "Not In Received Channel [dict get $payload channel] "
+      if {[dict get $payload channel] ni $COMM_CHANNELS} {
+        # TODO: Handle this with logger
+        puts stderr "Not In Received Channel [dict get $payload channel] "
         return
       }
+
       # Called before anything is done with the received payload but after it is
       # decoded. $payload may be modified if necessary before it is further evaluated.
       try {my run_hook evaluate receive} on error {r} { return }
@@ -57,12 +61,13 @@
       # service if it does not exist.
       # - If we receive an empty value in return, the received data has been rejected.
       set service [my service $proto $chanID $payload $descriptor]
-      if { $service eq {} } { return }
-
+      if {$service eq {}} { return }
       set protocol [$proto proto]
+
       if { $protocol ne "c" } {
         my event channel receive $proto $chanID $service
       }
+
       incr payloads_remaining -1
       $service receive $proto $chanID $payload $descriptor $payloads_remaining
     }
@@ -77,11 +82,20 @@
 # When we have not yet created a channel.  For example, it can be useful to request
 # a group of clients to join a specific channel.
 ::oo::define ::cluster::cluster method check_filter { filter } {
-  #puts "Checking Filter: $filter"
-  if { $SERVICE_ID in $filter } { return 1 }
-  if { $SYSTEM_ID in $filter } { return 1 }
-  foreach tag $TAGS { if { $tag in $filter } { return 1 } }
-  return 0
+  if {$SERVICE_ID in $filter} {
+    return true
+  }
+  if {$SYSTEM_ID in $filter} {
+    return true
+  }
+  # filter is a list of values - we need to check if any of our tags
+  # match a given filter.
+  foreach tag $TAGS {
+    if { $tag in $filter } {
+      return true
+    }
+  }
+  return false
 }
 
 # Whenever we receive data, we will check to see if the service already exists
@@ -97,13 +111,16 @@
 
   # Added Security - if the system id does not match, we dont parse it when only
   # accepting local.
-  if { [dict get $CONFIG remote] == 0 && $system_id ne $SYSTEM_ID } { return }
+  if {[dict get $CONFIG remote] == 0 && $system_id ne [my hid]} {
+    # TODO: Handle this situation with event logging system
+    return
+  }
 
   set uuid ${service_id}@${system_id}
 
   set service ${NS}::services::$uuid
 
-  set serviceExists [expr { [info commands $service] ne {} }]
+  set serviceExists [expr {[info commands $service] ne {}}]
 
   # Call our service eval hook
   try {my run_hook evaluate service} on error {r} { return }
@@ -114,7 +131,7 @@
     # with the service.  If we validate, then we will return the
     # reference to the service to our handler.
     try {my run_hook service validate} on error {r} { return }
-    if { [$service validate $proto $chanID $payload $descriptor] } {
+    if {[$service validate $proto $chanID $payload $descriptor]} {
       return $service
     }
   } else {
@@ -125,7 +142,7 @@
       set service [::cluster::service create $service [self] $proto $chanID $payload $descriptor]
       return $service
     } on error {r o} {
-      ::onError $r $o "While Creating a Cluster Service" $service
+      catch { ::onError $r $o "While Creating a Cluster Service" $service }
       # Do nothing on creation error
     }
   }

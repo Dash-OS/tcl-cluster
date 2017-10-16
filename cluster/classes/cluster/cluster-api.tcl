@@ -11,14 +11,18 @@
 # the desired hook key.  We will either return {} or the given hooks body to be
 # evaluated.
 ::oo::define ::cluster::cluster method run_hook args {
-  if { $HOOKS eq {} } { return }
+  if { $HOOKS eq {} } {
+    return
+  }
   tailcall try [::cluster::ifhook $HOOKS {*}$args]
 }
 
 ::oo::define ::cluster::cluster method is_local { address } {
   if { $address in [::cluster::local_addresses] || [string equal $address localhost] } {
-    return 1
-  } else { return 0 }
+    return true
+  } else {
+    return false
+  }
 }
 
 # Get our scripts UUID to send in payloads
@@ -61,8 +65,9 @@
   return [dict get $CONFIG {*}$args]
 }
 
+# DEPRECIATED
 ::oo::define ::cluster::cluster method flags {} {
-  return [ list [my known_services] 0 0 0 ]
+  return [list [my known_services]]
 }
 
 # Resolve services by running a search against each $arg to return the
@@ -72,7 +77,9 @@
 ::oo::define ::cluster::cluster method resolve {filters args} {
   set services [my services]
   foreach filter [concat $filters $args] {
-    if { $services eq {} } { break }
+    if { $services eq {} } {
+      break
+    }
     set services [lmap e $services {
       if {
         ( [string match "::*" $filter] && [info commands $filter] ne {} )
@@ -121,8 +128,12 @@
     set op {}
     set services [my services]
     foreach filter $args {
-      if { $filter eq {} } { continue }
-      if { [llength $services] == 0 } { break }
+      if { $filter eq {} } {
+        continue
+      }
+      if { [llength $services] == 0 } {
+        break
+      }
       if { [string index $filter 0] eq "-" } {
         set opt [string trimleft $filter "-"]
         switch -glob -- $opt {
@@ -135,16 +146,22 @@
         continue
       }
       # This allows modifiers in object form { "-match": 1 }
-      if { $filter == 1 } { continue }
+      if { $filter == 1 } {
+        continue
+      }
       set services [lmap e $services {
         if { [string is true -strict [$e resolver $filter $modifier $op]] } {
           set e
-        } else { continue }
+        } else {
+          continue
+        }
       }]
     }
   } on error {result options} {
     ::onError $result $options "While Resolving Cluster Services" $args
-    if { ! [info exists services] } { set services {} }
+    if { ! [info exists services] } {
+      set services {}
+    }
   }
   return $services
 }
@@ -176,7 +193,9 @@
   set modifier equal
   set op {} ; set opt has
   foreach filter $args {
-    if { $filter eq {} } { continue }
+    if { $filter eq {} } {
+      continue
+    }
     if { [string index $filter 0] eq "-" } {
       set opt [string trimleft $filter "-"]
       switch -glob -- $opt {
@@ -189,26 +208,34 @@
       continue
     }
     # This allows modifiers in object form { "-match": 1 }
-    if { $filter == 1 } { continue }
+    if { $filter == 1 } {
+      continue
+    }
     switch -- $opt {
       all - has {
         # Must match every tag
         foreach tag $filter {
-          if { ! [my resolve_self $tag $modifier] } { return 0 }
+          if { ! [my resolve_self $tag $modifier] } {
+            return 0
+          }
         }
         return 1
       }
       not {
         # Must not match any of the tags
         foreach tag $filter {
-          if { [my resolve_self $tag $modifier] } { return 0 }
+          if { [my resolve_self $tag $modifier] } {
+            return 0
+          }
         }
         return 1
       }
       some {
         # Must have at least one $what
         foreach tag $filter {
-          if { [my resolve_self $tag $modifier] } { return 1 }
+          if { [my resolve_self $tag $modifier] } {
+            return 1
+          }
         }
       }
     }

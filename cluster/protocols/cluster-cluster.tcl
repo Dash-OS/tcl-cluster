@@ -5,8 +5,8 @@
 # A protocol must generally define both a SERVER and a CLIENT handler.  For our
 # server, we expect to listen to connections from clients and pass them to our
 # cluster so it can be properly handled.
-
 package require udp
+package require bpacket
 
 if { [info commands ::cluster::protocol::c] eq {} } {
   ::oo::class create ::cluster::protocol::c {}
@@ -20,7 +20,8 @@ if { [info commands ::cluster::protocol::c] eq {} } {
   set ID      $id
   set CONFIG  $config
   set CLUSTER $cluster
-  set STREAM  [bpacket stream new]
+  set STREAM  [bpacket create stream [namespace current]::stream]
+  $STREAM event [namespace code [list my ReceivePacket]]
   my CreateServer
 }
 
@@ -42,12 +43,14 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # 1 or 0 to indicate success of failure.
 ::oo::define ::cluster::protocol::c method send { packet {service {}} } {
   try {
-    if { [string bytelength $packet] > 0 } {
+    if { [string length $packet] > 0 } {
       puts -nonewline $SOCKET $packet
       chan flush $SOCKET
     }
   } on error {result options} {
-    catch { my CreateServer }
+    catch {
+      my CreateServer
+    }
     try {
       puts -nonewline $SOCKET $packet
       chan flush $SOCKET
@@ -112,7 +115,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
   }
   set SOCKET [udp_open $port reuse]
   set PORT   $port
-  puts "ttl [expr { [string is false -strict $remote] ? 0 : $remote }]"
+  # puts "ttl [expr { [string is false -strict $remote] ? 0 : $remote }]"
   chan configure $SOCKET  \
     -buffering   full     \
     -blocking    0        \
@@ -127,12 +130,18 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # receive from any other protocol.  Since we can call [chan configure $chan -peer]
 # we can still apply our Security Policies against it if required.
 ::oo::define ::cluster::protocol::c method Receive {} {
-  if { [chan eof $SOCKET] } {
+  if {[chan eof $SOCKET]} {
     catch { chan close $SOCKET }
     after 0 [list catch [list [namespace code [list my CreateServer]]]]
     return
   }
-  set bytes [read $SOCKET]
+  # append the available bytes to the protocol stream so that it can
+  # build any packets that it finds
+  $STREAM append [read $SOCKET]
+}
 
+# our stream handler will call this with complete packets
+# when they are ready
+::oo::define ::cluster::protocol::c method ReceivePacket packet {
   $CLUSTER receive [my proto] $SOCKET $packet
 }

@@ -172,9 +172,11 @@ proc ::cluster::join args {
   set config $::cluster::DEFAULT_CONFIG
   if { [dict exists $args -protocols] } {
     set protocols [dict get $args -protocols]
-  } else { set protocols [dict get $config protocols] }
+  } else {
+    set protocols [dict get $config protocols]
+  }
   dict for { k v } $args {
-    set k [string trimleft $k -]
+    set k  [string trimleft $k -]
     if { ! [dict exists $config $k] && $k ni $protocols } {
       throw CLUSTER_INVALID_ARGS "Invalid Cluster Config Key: ${k}, should be one of [dict keys $config]"
     }
@@ -184,8 +186,12 @@ proc ::cluster::join args {
     }
     dict set config $k $v
   }
-  set id [incr ::cluster::i]
+  set id [cluster id]
   return [::cluster::cluster create ::cluster::clusters::cluster_$id $id $config]
+}
+
+proc ::cluster::id {} {
+  tailcall incr ::cluster::i
 }
 
 ::cluster::source

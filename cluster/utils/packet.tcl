@@ -27,7 +27,7 @@ proc ::cluster::packet::encode { payload } {
 }
 
 proc ::cluster::packet::decode { packet {cluster {}} } {
-  return [io decode $packet \
+  set decoded [io decode $packet \
     -validate [list ::apply {
       {cluster field} {
         # break        - stop parsing, return packet as is
@@ -58,6 +58,11 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
       }
     } $cluster]
   ]
+
+  # puts "Decoded Packet:"
+  # puts $decoded
+
+  return $decoded
 }
 
 # TODO: trash this once we confirm the above rewrite is working

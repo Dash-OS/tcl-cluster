@@ -51,7 +51,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # When we want to send data to this protocol we will call this with the
 # service that we are wanting to send the payload to. We should return
 # 1 or 0 to indicate success of failure.
-::oo::define ::cluster::protocol::c method send { packet {service {}} } {
+::oo::define ::cluster::protocol::c method send {packet {service {}}} {
   try {
     if {[string length $packet] > 0} {
       puts -nonewline $SOCKET $packet

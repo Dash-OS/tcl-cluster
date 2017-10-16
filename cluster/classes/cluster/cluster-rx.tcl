@@ -29,48 +29,48 @@
         }
       }
     }
-    # Attempt to decode the received packet.
-    # An empty payload will be returned if we fail to decode the packet for any reason.
-    set payloads           [::cluster::packet::decode $packet [self]]
-    set payloads_remaining [llength $payloads]
-    foreach payload $payloads {
-      # DEPRECIATED
-      # NOTE: As of version >1.1.4 this should be handled by bpacket streams
-      #       and our -validate process during packet decoding
-      # if {$payload eq {} || ! [dict exists $payload sid]} {
-      #   # Ignore empty payloads or payloads that we receive from ourselves.
-      #   return
-      # }
-      # Are we currently listening to the channel that the communication was
-      # received on?
-      if {[dict get $payload channel] ni $COMM_CHANNELS} {
-        # TODO: Handle this with logger
-        puts stderr "Not In Received Channel [dict get $payload channel] "
-        return
-      }
 
-      # Called before anything is done with the received payload but after it is
-      # decoded. $payload may be modified if necessary before it is further evaluated.
-      try {my run_hook evaluate receive} on error {r} { return }
+    # our stream handler should insure we receive single packets at a time here.
+    set payload [::cluster::packet::decode $packet [self]]
 
-      try {my run_hook channel [dict get $payload channel] receive} on error {r} { return }
-
-      #lassign $payload type rchan op ruid system_id service_id protocols flags data
-
-      # Provide the data to the matching service to handle and parse.  Create the
-      # service if it does not exist.
-      # - If we receive an empty value in return, the received data has been rejected.
-      set service [my service $proto $chanID $payload $descriptor]
-      if {$service eq {}} { return }
-      set protocol [$proto proto]
-
-      if { $protocol ne "c" } {
-        my event channel receive $proto $chanID $service
-      }
-
-      incr payloads_remaining -1
-      $service receive $proto $chanID $payload $descriptor $payloads_remaining
+    if {$payload eq {}} {
+      # if a packet was ignored or could not be decoded it will be empty
+      # generally this is due to -validate causing it to return.
+      #
+      # this can be expected if we receive a packet from ourselves or
+      # via a filter which doesnt match.
+      return
     }
+
+    # Are we currently listening to the channel that the communication was
+    # received on?
+    if {[dict get $payload channel] ni $COMM_CHANNELS} {
+      # TODO: Handle this with logger
+      puts stderr "Not In Received Channel [dict get $payload channel] "
+      return
+    }
+
+    # Called before anything is done with the received payload but after it is
+    # decoded. $payload may be modified if necessary before it is further evaluated.
+    try {my run_hook evaluate receive} on error {r} { return }
+
+    try {my run_hook channel [dict get $payload channel] receive} on error {r} { return }
+
+    #lassign $payload type rchan op ruid system_id service_id protocols flags data
+
+    # Provide the data to the matching service to handle and parse.  Create the
+    # service if it does not exist.
+    # - If we receive an empty value in return, the received data has been rejected.
+    set service [my service $proto $chanID $payload $descriptor]
+    if {$service eq {}} { return }
+    set protocol [$proto proto]
+
+    if { $protocol ne "c" } {
+      my event channel receive $proto $chanID $service
+    }
+
+    incr payloads_remaining -1
+    $service receive $proto $chanID $payload $descriptor $payloads_remaining
   } on error {result options} {
     #puts $result
     ::onError $result $options "While Parsing a Received Cluster Packet" $proto $chanID

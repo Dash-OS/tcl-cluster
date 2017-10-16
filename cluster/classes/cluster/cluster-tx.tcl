@@ -3,7 +3,12 @@
   try {
     set proto [dict get $PROTOCOLS c]
     try {my run_hook broadcast} on error {r} { return 0 }
-    try {my run_hook channel [dict get $payload channel] send} on error {r} { return 0 }
+    if {[dict exists $payload channel]} {
+      try {my run_hook channel [dict get $payload channel] send} on error {r} { return 0 }
+    } else {
+      # broadcasts are channel 0 if not defined
+      dict set payload channel 0
+    }
     return [$proto send [::cluster::packet::encode $payload]]
   } on error {result options} {
     ::onError $result $options "While Broadcasting a Cluster Payload" $payload
@@ -14,7 +19,7 @@
 # will reset their timers for our service as they know we still exist.
 ::oo::define ::cluster::cluster method heartbeat { {props {}} {tags 0} {channel 0} } {
   try {
-    if { $channel == 0 } {
+    if {$channel == 0} {
       # We only reset the heartbeat timer when broadcasting our heartbeat
       after cancel $AFTER_ID
       set AFTER_ID [ after [dict get $CONFIG heartbeat] [namespace code [list my heartbeat]] ]
@@ -69,12 +74,15 @@
 #   -ruid      {} \
 #   -data      {}
 
-::oo::define ::cluster::cluster method send { args } {
+::oo::define ::cluster::cluster method send args {
   set request [dict create]
+
   if { [dict exists $args -services] } {
     # A list of services to send to was provided directly
     set services [dict get $args -services]
-  } else { set services [list] }
+  } else {
+    set services [list]
+  }
   if { [dict exists $args -resolver] } {
     # Use the advanced resolver to discover the services to send to.
     lappend services {*}[my resolver [dict get $args -resolver]]
@@ -88,11 +96,13 @@
   #puts $services
   set allow_broadcast 0
 
-  if { [dict exists $args -broadcast] } {
+  if {[dict exists $args -broadcast]} {
     # 1 / 0 - Indicates if we want to broadcast the message or not.
     # If empty we will try to decide automatically.
     set broadcast [dict get $args -broadcast]
-    if { $broadcast eq {} } { set allow_broadcast 1 }
+    if {$broadcast eq {}} {
+      set allow_broadcast 1
+    }
   } else {
     # When broadcast is empty we are indicating that we are not yet
     # sure if we want to broadcast the message.
@@ -105,7 +115,11 @@
   }
 
   if { ! [string is true -strict $broadcast] } {
-    if { $services eq {} } { return }
+    if {$services eq {}} {
+      # when we are not broadcasting -- if no services are
+      # resolved then we have nothing to do.
+      return
+    }
   }
 
   if { [dict exists $args -protocols] } {
@@ -153,7 +167,7 @@
   # Make sure we only have one of each service
   set services [lsort -unique $services]
 
-  if { [string is true -strict $broadcast] && $services ne {} } {
+  if {[string is true -strict $broadcast] && $services ne {}} {
     # If we are using the cluster protocol to transmit, we use broadcast
     # to send our payload.  This means that we also need to add a filter
     # to the request so that only our desired services will handle the
@@ -181,13 +195,12 @@
     # to determine how to proceed.  We will not allow broadcasts with this command
     # as we will attempt to handle it ourselves if required.
     set response [my send_payload $services $payload $protocols 0]
-    if { $response eq {} } {
+    if {$response eq {}} {
       # We will receive an empty response when a hook has cancelled the
       # transmission
     } else {
       lassign $response success failed
       # puts stderr "Success: $success"
-
       if { $failed ne {} } {
         #puts stderr "Failed:  $failed"
         # If we failed to send to any services we will determine how we should

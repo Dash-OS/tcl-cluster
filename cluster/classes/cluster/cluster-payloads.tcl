@@ -47,8 +47,24 @@
     channel   [my get_channel $channel] \
     protocols [my protocols]
   ] $payload]
+
   if { $known } { dict set payload known [my known_services] }
   if { $tags  } { dict set payload tags $TAGS }
+
+  # we always want filter to be the first key no matter what.  if it exists
+  # then we will push it to the front of the dict.
+  #
+  # we do this so that while decoding a packet we can ignore it sooner rather
+  # than later if it is not a match
+  if {[dict exists $payload filter]} {
+    set filter [dict get $payload filter]
+    dict unset payload filter
+    set payload [dict merge \
+      [dict create filter $filter] \
+      $payload
+    ]
+  }
+
   return $payload
 }
 

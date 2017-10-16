@@ -186,12 +186,8 @@ proc ::cluster::join args {
     }
     dict set config $k $v
   }
-  set id [cluster id]
+  set id [incr ::cluster::i]
   return [::cluster::cluster create ::cluster::clusters::cluster_$id $id $config]
-}
-
-proc ::cluster::id {} {
-  tailcall incr ::cluster::i
 }
 
 ::cluster::source

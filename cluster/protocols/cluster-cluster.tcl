@@ -20,7 +20,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
   set ID      $id
   set CONFIG  $config
   set CLUSTER $cluster
-
+  my CreateStream
   my CreateServer
 }
 
@@ -32,8 +32,12 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 }
 
 ::oo::define ::cluster::protocol::c destructor {
-  catch { chan close $SOCKET }
-  catch { $STREAM destroy }
+  if {$SOCKET in [chan names]} {
+    catch { chan close $SOCKET }
+  }
+  if {[info exists $STREAM]} {
+    $STREAM destroy
+  }
 }
 
 ::oo::define ::cluster::protocol::c method proto {} { return c }
@@ -61,7 +65,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
       puts -nonewline $SOCKET $packet
       chan flush $SOCKET
     } on error {result options} {
-      ::onError $result $options "While Sending to the Cluster"
+      catch {::onError $result $options "While Sending to the Cluster"}
       return 0
     }
   }
@@ -79,7 +83,7 @@ if { [info commands ::cluster::protocol::c] eq {} } {
 # may define "port", "local" (is it a local-only protocol), etc.  They are available
 # to hooks at various points.
 ::oo::define ::cluster::protocol::c method descriptor { chanID } {
-  return [ dict create \
+  return [dict create \
     address [lindex [chan configure $chanID -peer] 0]  \
     port    $PORT
   ]

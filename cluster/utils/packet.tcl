@@ -3,6 +3,12 @@ package require bpacket
 namespace eval ::cluster {}
 namespace eval ::cluster::packet {}
 
+if 0 {
+  @ io handler
+    Here we create a [bpacket] io object which
+    is capable of encoding and decoding our packets
+    based upon the template below.
+}
 bpacket create io ::cluster::packet::io {
   1  varint  type
   2  varint  channel
@@ -21,11 +27,20 @@ bpacket create io ::cluster::packet::io {
   15 string  error
 }
 
-proc ::cluster::packet::encode { payload } {
+proc ::cluster::packet::encode payload {
   set encoded [io encode $payload]
   return $encoded
 }
 
+if 0 {
+  @ cluster packet decode
+    When we receive an encoded packet, we will decode it.  We use the
+    -validate option here so that we can cancel the decoding process
+    early so that we do not need to decode an entire packet just to
+    know that we are going to ignore it later.
+
+    cluster
+}
 proc ::cluster::packet::decode { packet {cluster {}} } {
   set decoded [io decode $packet \
     -validate [list ::apply {
@@ -38,19 +53,19 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
         # notes:
         #   - modify field with   upvar field   if needed
         #   - modify results with upvar results if needed
-        set value [dict get $field value]
         switch -- [dict get $field id] {
           4  {
-            if {$cluster eq {} || $value eq [$cluster sid]} {
+            # sid
+            if {$cluster eq {} || [dict get $field value] eq [$cluster sid]} {
               # if we receive a sid and it appears to come from us,
               # stop parsing the packet
-              puts "RECEIVE FROM SELF - QUIT"
               return false
             }
           }
           14 {
-            # check the filter and only continue if we match
-            if {$cluster ne {} && ! [$cluster check_filter $data]} {
+            # filter
+            if {$cluster ne {} && ! [$cluster check_filter [dict get $field value]]} {
+              # check the filter and only continue if we match
               return false
             }
           }
@@ -64,69 +79,3 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
 
   return $decoded
 }
-
-# TODO: trash this once we confirm the above rewrite is working
-# try {
-#   # ~! "Decode Packet" "Decoding a Packet [string bytelength $packet]"
-#   set reader  [::bpacket::reader new $packet]
-#   set result  [dict create]
-#   set results [list]
-#   set active 1
-#   while {$active} {
-#     lassign [$reader next] active id type data
-#     switch -- $active {
-#       0 {
-#         # We are done parsing the packet!
-#         lappend results $result
-#         break
-#       }
-#       1 {
-#           # We have more to parse!
-#           switch -- $id {
-#           1  {
-#             lassign $data type channel
-#             dict set result type $type
-#             dict set result channel $channel
-#           }
-#           2  { dict set result hid $data }
-#           3  { dict set result sid $data }
-#           4  { dict set result flags $data }
-#           5  { dict set result timestamp $data }
-#           6  { dict set result protocols $data }
-#           7  { dict set result ruid $data }
-#           8  { dict set result op $data }
-#           9  { dict set result data $data }
-#           10 { dict set result raw $data }
-#           11 { dict set result tags $data }
-#           12 { dict set result keepalive $data }
-#           13 {
-#             # When we receive a filter we will immediately try to check with the
-#             # cluster if our service matches and quit decoding immediately if we
-#             # dont.
-#             if { $cluster ne {} && ! [$cluster check_filter $data] } {
-#               break
-#             }
-#             dict set result filter $data
-#           }
-#           14 {
-#             dict set result error $data
-#           }
-#         }
-#       }
-#       2 {
-#         # We are done with a packet -- but another might still be
-#         # available!
-#         lappend results $result
-#         set result [dict create]
-#       }
-#     }
-#   }
-#   $reader destroy
-# } on error {result options} {
-#   puts stderr "Malformed Packet! $result"
-#   catch { ::onError $result $options "Malformed Packet!" }
-#   catch { $reader destroy }
-# }
-# if { $active } {
-#   set result {}
-# }

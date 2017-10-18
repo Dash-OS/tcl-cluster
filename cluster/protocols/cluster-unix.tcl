@@ -30,10 +30,28 @@ if {[info commands ::cluster::protocol::u] eq {}} {
 }
 
 ::oo::define ::cluster::protocol::u method SetServerPath config {
-  set SERVER_PATH [file normalize \
+  set path [file normalize \
     [file nativename [dict get $config u path]]
   ]
-  append SERVER_PATH - [$CLUSTER sid]
+
+  set filename [file tail $path]
+  set dir      [file dirname $path]
+
+  set extidx [string last "." $filename]
+
+  # index
+  if {$extidx != -1 && $extidx != 0} {
+    set ext      [string range $filename $extidx end]
+    set filename [string range $filename 0 end-[string length $ext]]
+  } else {
+    set ext {}
+  }
+  set SERVER_PATH [file join \
+    $dir \
+    ${filename}-[$CLUSTER sid]${ext}
+  ]
+
+  puts $SERVER_PATH
 }
 
 ::oo::define ::cluster::protocol::u method CreateStream {} {

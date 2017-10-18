@@ -35,7 +35,14 @@
 # removed from our cache.
 ::oo::define ::cluster::cluster method ttl  {} { return [dict get $CONFIG ttl] }
 
-::oo::define ::cluster::cluster method protocols {} { return [dict get $CONFIG protocols] }
+::oo::define ::cluster::cluster method protocols {{objects false}} {
+  if {$objects} {
+    return [info commands ${NS}::protocols::*]
+  } else {
+    return [dict get $CONFIG protocols] 
+  }
+
+}
 
 ::oo::define ::cluster::cluster method protocol { protocol } {
   if { [dict exists $PROTOCOLS $protocol] } {

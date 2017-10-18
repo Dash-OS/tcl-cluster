@@ -170,11 +170,13 @@ if 0 {
 }
 proc ::cluster::join args {
   set config $::cluster::DEFAULT_CONFIG
+
   if { [dict exists $args -protocols] } {
     set protocols [dict get $args -protocols]
   } else {
     set protocols [dict get $config protocols]
   }
+
   dict for { k v } $args {
     set k  [string trimleft $k -]
     if { ! [dict exists $config $k] && $k ni $protocols } {
@@ -188,7 +190,7 @@ proc ::cluster::join args {
     }
     dict set config $k $v
   }
-  
+
   # in case a boolean is passed to remote value, we convert to number
   # style boolean
   set remote [dict get $config remote]

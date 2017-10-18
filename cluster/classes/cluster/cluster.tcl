@@ -84,7 +84,7 @@
   set PROTOCOLS [dict create]
   namespace eval ${NS}::protocols {}
   foreach protocol [dict get $CONFIG protocols] {
-    if { [info commands ::cluster::protocol::$protocol] ne {} } {
+    if {[info commands ::cluster::protocol::$protocol] ne {}} {
       dict set PROTOCOLS $protocol \
         [::cluster::protocol::$protocol create \
           ${NS}::protocols::$protocol [self] $ID $CONFIG

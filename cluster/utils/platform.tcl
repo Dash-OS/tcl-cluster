@@ -24,7 +24,7 @@ if 0 {
 switch -- $::tcl_platform(platform) {
   unix {
     package require unix
-    # unix requires tuapi if possible 
+    # unix requires tuapi if possible
   }
 }
 

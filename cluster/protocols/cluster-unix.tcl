@@ -46,12 +46,11 @@ if {[info commands ::cluster::protocol::u] eq {}} {
   } else {
     set ext {}
   }
+
   set SERVER_PATH [file join \
     $dir \
     ${filename}-[$CLUSTER sid]${ext}
   ]
-
-  puts $SERVER_PATH
 }
 
 ::oo::define ::cluster::protocol::u method CreateStream {} {
@@ -64,11 +63,10 @@ if {[info commands ::cluster::protocol::u] eq {}} {
 }
 
 ::oo::define ::cluster::protocol::u destructor {
-  catch {
-    my CloseSocket $SOCKET {} 0
-  }
-  catch {
-    $STREAM destroy
+  catch { my CloseSocket $SOCKET {} 0 }
+  catch { $STREAM destroy }
+  if {[file exists $SERVER_PATH]} {
+    file delete -force $SERVER_PATH
   }
 }
 

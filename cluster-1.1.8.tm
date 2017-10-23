@@ -193,11 +193,7 @@ proc ::cluster::join args {
 
   # in case a boolean is passed to remote value, we convert to number
   # style boolean
-  set remote [dict get $config remote]
-  if {$remote eq true || $remote eq false} {
-    # bool() will convert to a 0 or 1 style boolean
-    dict set config remote [expr {bool($remote)}]
-  }
+  dict set config remote [expr {bool([dict get $config remote])}]
 
   set id [incr ::cluster::i]
   return [::cluster::cluster create ::cluster::clusters::cluster_$id $id $config]

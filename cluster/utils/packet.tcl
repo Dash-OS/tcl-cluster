@@ -59,14 +59,14 @@ proc ::cluster::packet::decode { packet {cluster {}} } {
             if {$cluster eq {} || [dict get $field value] eq [$cluster sid]} {
               # if we receive a sid and it appears to come from us,
               # stop parsing the packet
-              return false
+              return 0
             }
           }
           14 {
             # filter
             if {$cluster ne {} && ! [$cluster check_filter [dict get $field value]]} {
               # check the filter and only continue if we match
-              return false
+              return 0
             }
           }
         }
